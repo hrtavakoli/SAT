@@ -26,35 +26,41 @@ class ConvLSTMCell(nn.Module):
         self.input_channels = input_channels
         self.hidden_channels = hidden_channels
         self.kernel_size = kernel_size
+        self.spatial_size = spatial_size
 
         pad_size = int(np.floor(kernel_size/2))
         # define input gate weights
-        self.W_xi = nn.Conv2d(input_channels, hidden_channels, kernel_size=kernel_size, stride=1, padding=pad_size, bias=True)
-        self.W_hi = nn.Conv2d(hidden_channels, hidden_channels, kernel_size=kernel_size, stride=1, padding=pad_size, bias=False)
+        self.W_xi = nn.Conv2d(input_channels, hidden_channels, kernel_size=kernel_size, stride=1,
+                              padding=pad_size, bias=True)
+        self.W_hi = nn.Conv2d(hidden_channels, hidden_channels, kernel_size=kernel_size, stride=1,
+                              padding=pad_size, bias=False)
 
         self.W_ci = nn.Parameter(torch.zeros(hidden_channels, spatial_size[0], spatial_size[1]))
 
         # define forget gate weights
-        self.W_xf = nn.Conv2d(input_channels, hidden_channels, kernel_size=kernel_size, stride=1, padding=pad_size, bias=True)
-        self.W_hf = nn.Conv2d(hidden_channels, hidden_channels, kernel_size=kernel_size, stride=1, padding=pad_size, bias=False)
+        self.W_xf = nn.Conv2d(input_channels, hidden_channels, kernel_size=kernel_size, stride=1,
+                              padding=pad_size, bias=True)
+        self.W_hf = nn.Conv2d(hidden_channels, hidden_channels, kernel_size=kernel_size, stride=1,
+                              padding=pad_size, bias=False)
 
         self.W_cf = nn.Parameter(torch.zeros(hidden_channels, spatial_size[0], spatial_size[1]))
 
         # define output gate weights
-        self.W_xo = nn.Conv2d(input_channels, hidden_channels, kernel_size=kernel_size, stride=1, padding=pad_size, bias=True)
-        self.W_ho = nn.Conv2d(hidden_channels, hidden_channels, kernel_size=kernel_size, stride=1, padding=pad_size, bias=False)
+        self.W_xo = nn.Conv2d(input_channels, hidden_channels, kernel_size=kernel_size, stride=1,
+                              padding=pad_size, bias=True)
+        self.W_ho = nn.Conv2d(hidden_channels, hidden_channels, kernel_size=kernel_size, stride=1,
+                              padding=pad_size, bias=False)
 
         self.W_co = nn.Parameter(torch.zeros(hidden_channels, spatial_size[0], spatial_size[1]))
 
         # define cell weights
-        self.W_xc = nn.Conv2d(input_channels, hidden_channels, kernel_size=kernel_size, stride=1, padding=pad_size, bias=True)
-        self.W_hc = nn.Conv2d(hidden_channels, hidden_channels, kernel_size=kernel_size, stride=1, padding=pad_size, bias=False)
-
-    def _init_weights_(self):
-
-        return 1
+        self.W_xc = nn.Conv2d(input_channels, hidden_channels, kernel_size=kernel_size, stride=1,
+                              padding=pad_size, bias=True)
+        self.W_hc = nn.Conv2d(hidden_channels, hidden_channels, kernel_size=kernel_size, stride=1,
+                              padding=pad_size, bias=False)
 
     def forward(self, x, h, c):
+
         ig = self.W_xi(x) + self.W_hi(h) + torch.mul(self.W_ci, c)
         ig = torch.sigmoid(ig)
         fg = self.W_xf(x) + self.W_hf(h) + torch.mul(self.W_cf, c)
@@ -66,20 +72,44 @@ class ConvLSTMCell(nn.Module):
         return [h_new, c_new]
 
 
+# Onle layer convolution LSTM network with one step processing
 class ConvLSTM(nn.Module):
+    """
+        Onle layer convolution LSTM  with one step processing. keeps the states
+    """
 
-    def __init__(self, input_size, hidden_size, num_layers=1, dropout=False):
+    def __init__(self, input_size, hidden_size, kernel_size):
+        """
+        :param input_size: the size of input in the form of [batch size x number of input channels x height x width]
+        :param hidden_size:
+        :param kernel_size:
+        """
 
-        super(ConvLSTMCell, self).__init__()
-        batch_size = input_size[0]
+        super(ConvLSTM, self).__init__()
+        self.Bsize = input_size[0]
+        self.input_channel = input_size[1]
+        self.Hsize = input_size[2]
+        self.Wsize = input_size[3]
+        self.hidden_size = hidden_size
 
+        self.cell = ConvLSTMCell(input_channels=self.input_channel, hidden_channels=hidden_size,
+                                 kernel_size=kernel_size, spatial_size=[self.Hsize, self.Wsize])
+        # initialize hidden state and cell with no prior information to zero
+        self.H = torch.zeros((self.Bsize, self.hidden_size, self.Hsize, self.Wsize))
+        self.C = torch.zeros((self.Bsize, self.hidden_size, self.Hsize, self.Wsize))
 
+    def forward(self, x):
+        """
+            compute one step pass of the convolution LSTM
+        :param x: input data
+        :return: output x [hidden state x cell state]
+        """
+        self.H, self.C = self.cell(x, self.H, self.C)
+        return self.H, [self.H, self.C]
 
 
 if __name__ == "__main__":
 
-    input_x = torch.zeros([10, 100, 20, 30])
-    input_c = torch.zeros([10, 50, 20, 30])
-    input_h = torch.zeros([10, 50, 20, 30])
-    model = ConvLSTMCell(100, 50, 3, [20, 30])
-    model(input_x, input_h, input_c)
+    input_x = torch.ones([10, 100, 20, 30])
+    model = ConvLSTM([10, 100, 20, 30], hidden_size=50, kernel_size=3)
+    print(model(input_x)[0].shape)
