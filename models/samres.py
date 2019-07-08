@@ -17,12 +17,14 @@ class GaussPrior(nn.Module):
         define a Gaussian prior
     """
 
-    def __inint__(self, n_gp):
+    def __init__(self, n_gp):
         """
 
         :param n_gp: number of Gaussian Priors
         :return:
         """
+
+        super(GaussPrior, self).__init__()
 
         self.ngp = n_gp
 
@@ -39,7 +41,21 @@ class GaussPrior(nn.Module):
     def forward(self, x):
 
         [bs, _, h, w] = x.shape
-        
+
+        grid_h, grid_w = torch.meshgrid(torch.arange(0, h), torch.arange(0, w))
+        gaussian = torch.zeros((self.ngp, h, w))
+        for i in range(self.ngp):
+            mu_x = self.W[i, 0].clamp(0.25, 0.75)
+            mu_y = self.W[i, 1].clamp(0.25, 0.75)
+            sigma_x = self.W[i, 2].clamp(0.1, 0.9)
+            sigma_y = self.W[i, 3].clamp(0.2, 0.8)
+            gaussian[i, :] = torch.exp(-(torch.div((grid_w.float() - mu_x).pow(2), 2*sigma_x.pow(2)+1e-8) +
+                                         torch.div((grid_h.float() - mu_y).pow(2), 2*sigma_y.pow(2)+1e-8)))
+
+        gaussian = gaussian.repeat(bs, 1, 1, 1)
+        return gaussian
+
+
 
 
 class AttnConvLSTM(nn.Module):
@@ -120,7 +136,7 @@ class Model(nn.Module):
 
 
 if __name__ == "__main__":
-    data = torch.zeros(1, 3, 240, 320)
-    m = Model()
+    data = torch.zeros(1, 30, 3, 4)
+    m = GaussPrior(n_gp=16)
     a = m(data)
     print(a.shape)
