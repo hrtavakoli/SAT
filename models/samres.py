@@ -66,6 +66,7 @@ class AttnConvLSTM(nn.Module):
         :param kernel_size:
         :param nstep: number of steps to compute the attentive mechanism
         """
+        super(AttnConvLSTM, self).__init__()
 
         attn_size = input_size[1]
         self.bsize = input_size[0]
@@ -86,32 +87,45 @@ class AttnConvLSTM(nn.Module):
 
         for i in range(self.nstep):
 
-            Zt = self.Va(F.tanh(self.Wa(x) + self.Ua(h)))
-            At = F.softmax(Zt.view(self.bsize, -1), dim=1).view(self.bSize, 1, self.Hsize, self.Bsize)
+            Zt = self.Va(torch.tanh(self.Wa(x) + self.Ua(h)))
+            At = F.softmax(Zt.view(self.bsize, -1), dim=1).view(self.bsize, 1, self.Hsize, self.Wsize)
             Xt = torch.mul(x, At)
             output, [h, c] = self.convLSTM(Xt)
 
         return output
 
 
-class Model(nn.Module):
+class SamResNet(nn.Module):
     # SAM ResNet model
 
-    def __init__(self):
-        super(Model, self).__init__()
+    def __init__(self, bsize, nstep=3, W=40, H=30):
+        """
 
-        self.features = nn.Sequential(*list(resnet50(pretrained=True).children())[:-1])
+        :param bsize: batch size
+        :param nstep: number of attentionsteps
+        :param W: width of expected output
+        :param H: height of expected output
+        """
+        super(SamResNet, self).__init__()
+
+        self.w = W
+        self.h = H
+
+        self.features = nn.Sequential(*list(resnet50(pretrained=True).children())[:-2])
         self.dreduc = nn.Sequential(
-            nn.Conv2d(2048, 512, kernel_size=3, stride=1, padding=1),
+            nn.Conv2d(2048, 512, kernel_size=3, stride=1),
             nn.ReLU(inplace=True)
         )
 
+        self.attn = AttnConvLSTM([bsize, 512, 30, 40], kernel_size=3, nstep=nstep)
+
         self.decoder0 = nn.Sequential(
-            nn.Conv2d(528, 512, kernel_size=5, stride=1, padding=2, dilation=4),
+            nn.Conv2d(528, 512, kernel_size=5, stride=1, padding=8, dilation=4),
             nn.ReLU(inplace=True),
         )
+
         self.decoder1 = nn.Sequential(
-            nn.Conv2d(528, 512, kernel_size=5, stride=1, padding=2, dilation=4),
+            nn.Conv2d(528, 512, kernel_size=5, stride=1, padding=8, dilation=4),
             nn.ReLU(inplace=True),
         )
 
@@ -120,28 +134,31 @@ class Model(nn.Module):
             nn.ReLU(inplace=True)
         )
 
+        self.prior0 = GaussPrior(16)
         self.prior1 = GaussPrior(16)
-        self.prior2 = GaussPrior(16)
 
     def forward(self, inputs):
 
         inputs = self.features(inputs)
         inputs = self.dreduc(inputs)
+        inputs = F.interpolate(inputs, [self.h, self.w])
 
-        prior = self.prior1(inputs)
+        inputs = self.attn(inputs)
+
+        prior = self.prior0(inputs)
         inputs = torch.cat((inputs, prior), dim=1)
         inputs = self.decoder0(inputs)
 
-        prior = self.prior2(inputs)
+        prior = self.prior1(inputs)
         inputs = torch.cat((inputs, prior), dim=1)
-        inputs = self.decoder2(inputs)
+        inputs = self.decoder1(inputs)
 
         inputs = self.output(inputs)
         return inputs
 
 
 if __name__ == "__main__":
-    data = torch.zeros(1, 30, 3, 4)
-    m = Model()
+    data = torch.zeros(10, 3, 240, 320)
+    m = Model(10)
     a = m(data)
     print(a.shape)
