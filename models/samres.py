@@ -56,8 +56,6 @@ class GaussPrior(nn.Module):
         return gaussian
 
 
-
-
 class AttnConvLSTM(nn.Module):
     """
         Attentive Conv LSTM for SAMRES Model
@@ -121,22 +119,29 @@ class Model(nn.Module):
             nn.Conv2d(512, 1, kernel_size=1, stride=1, padding=0),
             nn.ReLU(inplace=True)
         )
-        # we create a prior map of 6x8; the original models uses a 3x4 map. We We think this is more effective
-        self.prior = nn.Parameter(torch.ones((1, 1, 6, 8), requires_grad=True))
+
+        self.prior1 = GaussPrior(16)
+        self.prior2 = GaussPrior(16)
 
     def forward(self, inputs):
 
         inputs = self.features(inputs)
         inputs = self.dreduc(inputs)
 
-        output = F.dropout(inputs, p=0.5)
-        output = self.decoder(output)
-        output = output * F.interpolate(self.prior, size=(output.shape[2], output.shape[3]))
-        return output
+        prior = self.prior1(inputs)
+        inputs = torch.cat((inputs, prior), dim=1)
+        inputs = self.decoder0(inputs)
+
+        prior = self.prior2(inputs)
+        inputs = torch.cat((inputs, prior), dim=1)
+        inputs = self.decoder2(inputs)
+
+        inputs = self.output(inputs)
+        return inputs
 
 
 if __name__ == "__main__":
     data = torch.zeros(1, 30, 3, 4)
-    m = GaussPrior(n_gp=16)
+    m = Model()
     a = m(data)
     print(a.shape)
