@@ -57,10 +57,10 @@ class ACCLoss(nn.Module):
         return loss.sum()
 
 
-class NEGNSSLoss(nn.Module):
+class ANSSLoss(nn.Module):
 
     def __init__(self):
-        super(NEGNSSLoss, self).__init__()
+        super(ANSSLoss, self).__init__()
 
     def forward(self, pred, gt_fix):
 
@@ -75,3 +75,4 @@ class NEGNSSLoss(nn.Module):
         nss = torch.sum(gt_fix * pred, dim=1, keepdim=True) / gt_fix.sum(dim=1, keepdim=True)
         nss_e = torch.exp(-nss)
         return nss_e.sum()
+
