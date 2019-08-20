@@ -1,0 +1,5 @@
+Tue 20 Aug 2019 13:54:32 INFO dataiter.py 24 89292 data set: ['0006.jpg', '0007.jpg', '0005.jpg', '0004.jpg', '0001.jpg', '0003.jpg', '0002.jpg', '0008.jpg']
+Tue 20 Aug 2019 13:54:45 INFO model.py 89 89292 torch.Size([4, 512, 40, 30])
+Tue 20 Aug 2019 13:54:45 INFO model.py 90 89292 torch.Size([4, 16, 40, 30])
+Tue 20 Aug 2019 13:54:46 INFO model.py 93 89292 torch.Size([4, 512, 40, 30])
+Tue 20 Aug 2019 13:54:46 INFO deepfix.py 47 89292 epoch 0, batch 0, EucLoss = 0.443090081215
