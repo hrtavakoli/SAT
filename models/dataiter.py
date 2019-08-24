@@ -31,7 +31,7 @@ class SaliconSet(Dataset):
 		try:
 			file_name = self.img_list[idx]
 			curr_data_path = os.path.join(self.data_path, file_name)
-			curr_label_path = os.path.join(self.label_path, file_name)
+			curr_label_path = os.path.join(self.label_path, file_name.split('.')[0]+'.jpeg')
 
 			curr_data_batch = np.swapaxes(cv2.imread(curr_data_path), 0, 2).astype(np.float32)
 			curr_label_batch = np.expand_dims(cv2.resize(cv2.imread(curr_label_path), (40, 30), interpolation=cv2.INTER_LANCZOS4)[:,:,0].transpose(), axis=0).astype(np.float32)

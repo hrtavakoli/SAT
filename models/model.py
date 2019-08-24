@@ -11,13 +11,16 @@ import cv2
 
 from config import *
 
+device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
+
 def init_bias_from_file(inputwidth, inputheight, batchsize):
 	bias = np.zeros((1, 16, inputwidth//16, inputheight//16))
 	for _,_,fs in os.walk(BIAS_PATH):
 		for i, f in enumerate(sorted([x for x in fs if x.endswith('.png')])):
 			t = cv2.imread(os.path.join(BIAS_PATH, f), cv2.IMREAD_GRAYSCALE)
 			bias[0,i,:] = cv2.resize(cv2.imread(os.path.join(BIAS_PATH, f), cv2.IMREAD_GRAYSCALE), (inputwidth//16, inputheight//16), interpolation=cv2.INTER_LANCZOS4).transpose()
-	return torch.tensor(bias.repeat(batchsize, 0)).float()
+	
+	return torch.tensor(bias.repeat(batchsize, 0)).float().to(device)
 
 class InceptionModule(nn.Module):
 	def __init__(self, c_in, c_out):
@@ -82,19 +85,16 @@ class Model(nn.Module):
 		self.biasconv1 = self.Conv(528, 512, 5, 12, 6)
 		self.biasconv2 = self.Conv(528, 512, 5, 12, 6)
 		self.output = self.Conv(512, 1, 1, 0)
-		self.loss = self.EucLoss()
+		# self.loss = self.EucLoss()
 
-	def forward(self, batch_data, batch_label):
+	def forward(self, batch_data):
 		x = self.backbone(batch_data)
-		logger.info(x.shape)
-		logger.info(self.bias.shape)
 		x = torch.cat([x, self.bias], 1)
 		x = self.biasconv1(x)
-		logger.info(x.shape)
 		x = torch.cat([x, self.bias], 1)
 		x = self.biasconv2(x)
 		x = self.output(x)
-		x = self.loss(x, batch_label)
+		# x = self.loss(x, batch_label)
 		return x
 
 	def Backbone(self):
