@@ -159,6 +159,6 @@ class SamResNet(nn.Module):
 
 if __name__ == "__main__":
     data = torch.zeros(10, 3, 240, 320)
-    m = Model(10)
+    m = SamResNet(10)
     a = m(data)
     print(a.shape)
