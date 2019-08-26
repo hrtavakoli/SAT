@@ -9,7 +9,7 @@ import torch.nn as nn
 import torch.nn.functional as F
 
 from torchvision.models import resnet50
-from models.reconv import ConvLSTM
+from reconv import ConvLSTM
 
 
 class GaussPrior(nn.Module):
@@ -95,7 +95,7 @@ class AttnConvLSTM(nn.Module):
         return output
 
 
-class SamResNet(nn.Module):
+class Model(nn.Module):
     # SAM ResNet model
 
     def __init__(self, bsize, nstep=3, W=40, H=30):
@@ -106,7 +106,7 @@ class SamResNet(nn.Module):
         :param W: width of expected output
         :param H: height of expected output
         """
-        super(SamResNet, self).__init__()
+        super(Model, self).__init__()
 
         self.w = W
         self.h = H
@@ -159,6 +159,6 @@ class SamResNet(nn.Module):
 
 if __name__ == "__main__":
     data = torch.zeros(10, 3, 240, 320)
-    m = SamResNet(10)
+    m = Model(10)
     a = m(data)
     print(a.shape)

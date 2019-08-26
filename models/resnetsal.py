@@ -45,10 +45,10 @@ class _ScaleUp(nn.Module):
         return output
 
 
-class Res50Sal(nn.Module):
+class Model(nn.Module):
 
     def __init__(self, ):
-        super(Res50Sal, self).__init__()
+        super(Model, self).__init__()
         self.encode_image = resnet50(pretrained=True)
         modules = list(self.encode_image.children())[:-2]
         self.encode_image = nn.Sequential(*modules)

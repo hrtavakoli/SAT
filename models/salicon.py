@@ -11,11 +11,11 @@ import torch.nn.functional as F
 from torchvision.models import vgg16
 
 
-class Salicon(nn.Module):
+class Model(nn.Module):
     # SALICON model
 
     def __init__(self):
-        super(Salicon, self).__init__()
+        super(Model, self).__init__()
 
         self.features = nn.Sequential(*list(vgg16(pretrained=True).features.children())[:-2])
         self.decoder = nn.Conv2d(1024, 1, kernel_size=1, stride=1, padding=0)
