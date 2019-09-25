@@ -1,97 +1,150 @@
-# coding:utf-8
-# 
-# @author: xsh
+'''
+Implementation of SalGAN.
+
+@author: Xiao Shanghua
+'''
 
 import torch
-import torch.optim as optim
+import torch.nn as nn
+import torch.nn.functional as F
+import numpy as np
+import os
+import cv2
 
-from torch.utils.data import DataLoader
-from torch.autograd import Variable
+from torchvision.models import vgg16
 
-from model import *
-from dataiter import *
-from config import *
+device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
 
-import matplotlib.pyplot as plt
+class FlattenOperator(nn.Module):
+    def forward(self, x):
+        return x.view(x.size()[0], -1)
 
-def normalize(arr, size):
-	return float(size) * (arr - np.min(arr)) / float(np.max(arr) - np.min(arr) + 1e-10)
+def Conv(c_in, c_out, kernel_size, padding, dilation=1):
+	return nn.Sequential(
+		nn.Conv2d(c_in, c_out, kernel_size=kernel_size, stride=1, padding=padding, dilation=dilation, bias=False),
+		nn.BatchNorm2d(c_out),
+		nn.ReLU6(inplace=True)
+	)
 
-def train():
-	device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
-	generator = Generator(640, 480, BATCH_SIZE).to(device)
-	discriminator = Discriminator(256, 192, BATCH_SIZE).to(device)
-	dataset = SaliconSet(DATA_PATH, LABEL_PATH)
-	rawloader = DataLoader(
-			dataset,
-			batch_size = BATCH_SIZE,
-			shuffle = True,
-			pin_memory = True,
+def Upsample(scale_factor=2):
+	return nn.Upsample(scale_factor=scale_factor, mode='bilinear')
+
+def MaxPool():
+	return nn.MaxPool2d(2, stride=2, padding=0)
+
+def Flatten():
+	return FlattenOperator()
+
+def Linear(inp_size, num_filter, activation):
+	return nn.Sequential(
+		nn.Linear(inp_size, num_filter),
+		# nn.BatchNorm1d(1),
+		nn.Sigmoid() if activation=='sigmoid' else nn.Tanh(),
 		)
-	criterion_dis = nn.BCELoss()
-	optimizer_dis = optim.Adagrad(discriminator.parameters(), lr=3e-4, weight_decay=1e-4)
-	criterion_gen = nn.BCELoss()
-	optimizer_gen = optim.Adagrad(generator.parameters(), lr=3e-4, weight_decay=1e-4)
 
-	for e in range(EPOCHES):
-		# first train dis with groundtruth, backward, train dis with fake, backward
-		# then gen salmap, get dis result, calc GAN loss, backward.
-		avg_loss_dis, avg_loss_gen = [], []
-		dataloader = iter(rawloader)
-		try:
-			if e <= WARMUP:
-				for data_batch, label_batch in dataloader:
-					generator.zero_grad()
-					output_batch = generator(data_batch.to(device))
-					loss = criterion_gen(output_batch, label_batch.to(device))
-					avg_loss_gen.append(loss.data.item())
-					loss.backward()
-					optimizer_gen.step()
-				logger.info('epoch %s, warmup-gen-loss=%s' % (e, float(sum(avg_loss_gen))/len(avg_loss_gen)))
-			else:
-				for s in range(DIS_STEPS):
-					discriminator.zero_grad()
-					data_batch, label_batch  = dataloader.__next__()
-					input_batch = data_batch.to(device)
-					input_real_batch = torch.cat((data_batch, label_batch), 1)
-					input_real_batch = input_real_batch.to(device)
-					output_batch_real = discriminator(input_real_batch)
-					loss_content_real = criterion_dis(output_batch_real, Variable(torch.ones(BATCH_SIZE, 1)).to(device))
-					gen_batch = generator(input_batch)
-					input_fake_batch = torch.cat((input_batch, gen_batch), 1)
-					input_fake_batch = input_fake_batch.to(device)
-					output_batch_fake = discriminator(input_fake_batch)
-					loss_content_fake = criterion_dis(output_batch_fake, Variable(torch.zeros(BATCH_SIZE, 1)).to(device))
-					loss_dis = loss_content_real + loss_content_fake
-					avg_loss_dis.append(loss_dis.data.item())
-					loss_dis.backward()
-					optimizer_dis.step()
-				logger.info('epoch %s, dis-loss=%s' % (e, float(sum(avg_loss_dis))/len(avg_loss_dis)))
-				for g in range(GEN_STEPS):
-					generator.zero_grad()
-					data_batch, label_batch  = dataloader.__next__()
-					input_batch = data_batch.to(device)
-					label_batch = label_batch.to(device)
-					gen_output = generator(input_batch)
-					loss_adversarial = criterion_gen(gen_output, label_batch)
-					input_fake_batch = torch.cat((input_batch, gen_output), 1)
-					output_batch = discriminator(input_fake_batch)
-					loss_content = criterion_dis(output_batch, Variable(torch.zeros(BATCH_SIZE, 1)).to(device))
-					loss_total = ALPHA * loss_adversarial + loss_content
-					avg_loss_gen.append(loss_total.data.item())
-					loss_total.backward()
-					optimizer_gen.step()
-				logger.info('epoch %s, gen-loss=%s' % (e, float(sum(avg_loss_gen))/len(avg_loss_gen)))
-		except StopIteration as stoperror:
-			pass
-		except Exception as error:
-			logger.error(error)
-			# traceback.print_exc()
-		finally:
-			if e % SAVE_STEP==0 and e!=0:
-				torch.save(generator, os.path.join(PARAM_PATH, 'generator.%s.pkl' % (e)))
-				torch.save(discriminator, os.path.join(PARAM_PATH, 'discriminator.%s.pkl' % (e)))
+def Backbone(layer_define):
+	seq = []
+	for layer in layer_define:
+		if layer[0] == 'c':
+			seq.append(Conv(*layer[1:]))
+		elif layer[0] == 'p':
+			seq.append(MaxPool())
+		elif layer[0] == 'u':
+			seq.append(Upsample(layer[1]))
+		elif layer[0] == 'f':
+			seq.append(Flatten())
+		elif layer[0] == 'l':
+			seq.append(Linear(*layer[1:]))
+	return nn.Sequential(*seq)
 
-if __name__ == '__main__':
-	# get_logger()
-	train()
+class Discriminator(nn.Module):
+	def __init__(self, inputwidth, inputheight, batchsize):
+		super(Discriminator, self).__init__()
+		self.layer_define = [
+			('c', 4, 3, 1, 1, 1),
+			('c', 3, 32, 3, 1, 1),
+			('p'),
+			('c', 32, 64, 3, 1, 1),
+			('c', 64, 64, 3, 1, 1),
+			('p'),
+			('c', 64, 64, 3, 1, 1),
+			('c', 64, 64, 3, 1, 1),
+			('p'),
+			('f'),
+			('l', 49152, 768, 'tanh'),
+			('l', 768, 100, 'tanh'),
+			('l', 100, 2, 'tanh'),
+			('l', 2, 1, 'sigmoid')
+		]
+		self.backbone = Backbone(self.layer_define)
+
+	def forward(self, batch_data):
+		x = self.backbone(batch_data)
+		return x
+
+class Generator(nn.Module):
+	def __init__(self, inputwidth, inputheight, batchsize, use_pretrained):
+		super(Generator, self).__init__()
+		self.encoder_define = [
+			('c', 3, 64, 3, 1, 1),
+			('p'),
+			('c', 64, 64, 3, 1, 1),
+			('c', 64, 128, 3, 1, 1),
+			('p'),
+			('c', 128, 128, 3, 1, 1),
+			('c', 128, 256, 3, 1, 1),
+			('p'),
+			('c', 256, 256, 3, 1, 1),
+			('c', 256, 256, 3, 1, 1),
+			('c', 256, 512, 3, 1, 1),
+			('p'),
+			('c', 512, 512, 3, 1, 1),
+			('c', 512, 512, 3, 1, 1),
+			('c', 512, 512, 3, 1, 1),
+			('c', 512, 512, 3, 1, 1),
+			('c', 512, 512, 3, 1, 1),
+			('c', 512, 512, 3, 1, 1),
+		]
+		self.decoder_define = [
+			('u', 2),
+			('c', 512, 512, 3, 1, 1),
+			('c', 512, 512, 3, 1, 1),
+			('c', 512, 512, 3, 1, 1),
+			('c', 512, 512, 3, 1, 1),
+			('c', 512, 512, 3, 1, 1),
+			('c', 512, 256, 3, 1, 1),
+			('u', 2),
+			('c', 256, 256, 3, 1, 1),
+			('c', 256, 256, 3, 1, 1),
+			('c', 256, 128, 3, 1, 1),
+			('u', 2),
+			('c', 128, 128, 3, 1, 1),
+			('c', 128, 64, 3, 1, 1),
+			('u', 2),
+			('c', 64, 64, 3, 1, 1),
+			('c', 64, 1, 3, 1, 1),
+		]
+		if use_pretrained:
+			self.encoder = nn.ModuleList(list(vgg16(pretrained=True).features)[:-1])
+		else:
+			self.encoder = Backbone(self.encoder_define)
+		self.decoder = Backbone(self.decoder_define)
+		self.sigmoid = nn.Sigmoid()
+
+	def forward(self, batch_data):
+		x = self.encoder(batch_data)
+		x = self.decoder(x)
+		x = self.sigmoid(x)
+		return x
+
+class Model(nn.Module):
+    def __init__(self, inputwidth=640, inputheight=480, batchsize=1, use_pretrained=False):
+        super(Model, self).__init__()
+        self.generator = Generator(inputwidth, inputheight, batchsize, use_pretrained=use_pretrained)
+        self.discriminator = Discriminator(inputwidth, inputheight, batchsize)
+
+    def forward(self, x, y):
+    	z = self.generator(x)
+    	dis_out_real = self.discriminator(torch.cat((x, y), 1))
+    	dis_out_fake = self.discriminator(torch.cat((z, y), 1))
+    	return z, dis_out_real, dis_out_fake
