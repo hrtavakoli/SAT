@@ -9,51 +9,7 @@ import torch.nn as nn
 import torch.nn.functional as F
 
 from torchvision.models import resnet50
-from reconv import ConvLSTM
-
-
-class GaussPrior(nn.Module):
-    """
-        define a Gaussian prior
-    """
-
-    def __init__(self, n_gp):
-        """
-
-        :param n_gp: number of Gaussian Priors
-        :return:
-        """
-
-        super(GaussPrior, self).__init__()
-
-        self.ngp = n_gp
-
-        self.W = nn.Parameter(torch.zeros(n_gp, 4))
-
-        self._init_weights()
-
-    def _init_weights(self):
-
-        for i in range(self.ngp):
-            torch.nn.init.uniform_(self.W[i, 0:1], 0.3, 0.7)
-            torch.nn.init.uniform_(self.W[i, 2:3], 0.05, 0.3)
-
-    def forward(self, x):
-
-        [bs, _, h, w] = x.shape
-
-        grid_h, grid_w = torch.meshgrid(torch.arange(0, h), torch.arange(0, w))
-        gaussian = torch.zeros((self.ngp, h, w))
-        for i in range(self.ngp):
-            mu_x = self.W[i, 0].clamp(0.25, 0.75)
-            mu_y = self.W[i, 1].clamp(0.25, 0.75)
-            sigma_x = self.W[i, 2].clamp(0.1, 0.9)
-            sigma_y = self.W[i, 3].clamp(0.2, 0.8)
-            gaussian[i, :] = torch.exp(-(torch.div((grid_w.float() - mu_x).pow(2), 2*sigma_x.pow(2)+1e-8) +
-                                         torch.div((grid_h.float() - mu_y).pow(2), 2*sigma_y.pow(2)+1e-8)))
-
-        gaussian = gaussian.repeat(bs, 1, 1, 1)
-        return gaussian
+from models.reconv import ConvLSTM
 
 
 class AttnConvLSTM(nn.Module):
@@ -83,14 +39,13 @@ class AttnConvLSTM(nn.Module):
 
     def forward(self, x):
 
-        output, [h, c] = self.convLSTM(x)
-
+        output, h, c = self.convLSTM(x)
         for i in range(self.nstep):
 
             Zt = self.Va(torch.tanh(self.Wa(x) + self.Ua(h)))
             At = F.softmax(Zt.view(self.bsize, -1), dim=1).view(self.bsize, 1, self.Hsize, self.Wsize)
-            Xt = torch.mul(x, At)
-            output, [h, c] = self.convLSTM(Xt)
+            Xt = torch.mul(output, At)
+            output, h, c = self.convLSTM(Xt)
 
         return output
 
@@ -120,12 +75,12 @@ class Model(nn.Module):
         self.attn = AttnConvLSTM([bsize, 512, 30, 40], kernel_size=3, nstep=nstep)
 
         self.decoder0 = nn.Sequential(
-            nn.Conv2d(528, 512, kernel_size=5, stride=1, padding=8, dilation=4),
+            nn.Conv2d(512, 512, kernel_size=5, stride=1, padding=8, dilation=4),
             nn.ReLU(inplace=True),
         )
 
         self.decoder1 = nn.Sequential(
-            nn.Conv2d(528, 512, kernel_size=5, stride=1, padding=8, dilation=4),
+            nn.Conv2d(512, 512, kernel_size=5, stride=1, padding=8, dilation=4),
             nn.ReLU(inplace=True),
         )
 
@@ -134,8 +89,6 @@ class Model(nn.Module):
             nn.ReLU(inplace=True)
         )
 
-        self.prior0 = GaussPrior(16)
-        self.prior1 = GaussPrior(16)
 
     def forward(self, inputs):
 
@@ -144,13 +97,11 @@ class Model(nn.Module):
         inputs = F.interpolate(inputs, [self.h, self.w])
 
         inputs = self.attn(inputs)
+        inputs = F.relu(inputs)
 
-        prior = self.prior0(inputs)
-        inputs = torch.cat((inputs, prior), dim=1)
+        # decoders without learning the prior to keep the number of parameters similar!
+        # we remove these in the experiments
         inputs = self.decoder0(inputs)
-
-        prior = self.prior1(inputs)
-        inputs = torch.cat((inputs, prior), dim=1)
         inputs = self.decoder1(inputs)
 
         inputs = self.output(inputs)
@@ -158,7 +109,10 @@ class Model(nn.Module):
 
 
 if __name__ == "__main__":
-    data = torch.zeros(10, 3, 240, 320)
-    m = Model(10)
-    a = m(data)
-    print(a.shape)
+    data = torch.ones(1, 3, 240, 320).cuda()
+    m = Model(1).cuda()
+    output = m(data)
+    print(output)
+    L = torch.sum(output)
+    print(L)
+    L.backward()

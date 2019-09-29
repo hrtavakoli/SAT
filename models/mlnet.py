@@ -25,7 +25,7 @@ class Model(nn.Module):
             nn.ReLU(inplace=True)
         )
         # we create a prior map of 6x8; the original models uses a 3x4 map. We We think this is more effective
-        self.prior = nn.Parameter(torch.ones((1, 1, 6, 8), requires_grad=True))
+        #self.prior = nn.Parameter(torch.ones((1, 1, 6, 8), requires_grad=True))
 
     def forward(self, inputs):
 
@@ -41,12 +41,5 @@ class Model(nn.Module):
         features = torch.cat((features[0], features[1], features[2]), dim=1)
         output = F.dropout(features, p=0.5)
         output = self.decoder(output)
-        output = output * F.interpolate(self.prior, size=(output.shape[2], output.shape[3]))
+        #output = output * F.interpolate(self.prior, size=(output.shape[2], output.shape[3]))
         return output
-
-
-if __name__ == "__main__":
-    data = torch.zeros(1, 3, 480, 640)
-    m = Model()
-    a = m(data)
-    print(a.shape)

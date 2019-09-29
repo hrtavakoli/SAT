@@ -29,7 +29,11 @@ class Model(nn.Module):
             nn.ReLU(inplace=True)
         )
 
+        for param in self.features.parameters():
+            param.requires_grad = False
+
     def forward(self, inputs):
+
         features = []
         for idx, feature in enumerate(self.features):
             inputs = feature(inputs)

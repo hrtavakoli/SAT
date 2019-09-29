@@ -18,7 +18,8 @@ class Model(nn.Module):
         super(Model, self).__init__()
 
         self.features = nn.Sequential(*list(vgg16(pretrained=True).features.children())[:-2])
-        self.decoder = nn.Conv2d(1024, 1, kernel_size=1, stride=1, padding=0)
+        self.decoder = nn.Sequential(nn.Conv2d(1024, 1, kernel_size=1, stride=1, padding=0),
+                                     nn.ReLU(inplace=True))
 
     def forward(self, fine_input):
 
@@ -35,6 +36,6 @@ class Model(nn.Module):
 
 if __name__ == "__main__":
     data = torch.zeros(1, 3, 600, 800)
-    m = Salicon()
+    m = Model()
     a = m(data)
     print(a.shape)

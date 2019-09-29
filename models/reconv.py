@@ -68,8 +68,9 @@ class ConvLSTMCell(nn.Module):
         c_new = torch.mul(fg, c) + torch.mul(ig, torch.tanh(self.W_xc(x) + self.W_hc(h)))
         output = torch.sigmoid(self.W_xo(x) + self.W_ho(h) + torch.mul(self.W_co, c))
         h_new = torch.mul(output, c_new)
-
-        return [h_new, c_new]
+        h_new = h_new.detach()
+        c_new = c_new.detach()
+        return output, h_new, c_new
 
 
 # Onle layer convolution LSTM network with one step processing
@@ -95,8 +96,8 @@ class ConvLSTM(nn.Module):
         self.cell = ConvLSTMCell(input_channels=self.input_channel, hidden_channels=hidden_size,
                                  kernel_size=kernel_size, spatial_size=[self.Hsize, self.Wsize])
         # initialize hidden state and cell with no prior information to zero
-        self.H = torch.zeros((self.Bsize, self.hidden_size, self.Hsize, self.Wsize))
-        self.C = torch.zeros((self.Bsize, self.hidden_size, self.Hsize, self.Wsize))
+        self.H = torch.zeros((self.Bsize, self.hidden_size, self.Hsize, self.Wsize)).cuda()
+        self.C = torch.zeros((self.Bsize, self.hidden_size, self.Hsize, self.Wsize)).cuda()
 
     def forward(self, x):
         """
@@ -104,12 +105,20 @@ class ConvLSTM(nn.Module):
         :param x: input data
         :return: output x [hidden state x cell state]
         """
-        self.H, self.C = self.cell(x, self.H, self.C)
-        return self.H, [self.H, self.C]
+        output, self.H, self.C = self.cell(x, self.H, self.C)
+        return output, self.H, self.C
 
 
 if __name__ == "__main__":
 
-    input_x = torch.ones([10, 100, 20, 30])
-    model = ConvLSTM([10, 100, 20, 30], hidden_size=50, kernel_size=3)
-    print(model(input_x)[0].shape)
+    input_x = torch.ones([1, 100, 20, 30]).cuda()
+    model = ConvLSTM([1, 100, 20, 30], hidden_size=100, kernel_size=3).cuda()
+
+    for i in range(10000):
+        output, _ = model(input_x)
+        print(output.shape)
+        output = torch.relu(output)
+        L = torch.sum(output)
+        print(L)
+        L.backward(retain_graph=True)
+        input_x = output
