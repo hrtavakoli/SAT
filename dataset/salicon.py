@@ -11,7 +11,7 @@ from PIL import Image
 from PIL import ImageFilter
 from PIL import ImageOps
 from torch.utils.data import Dataset
-from ..utils.function import padded_resize, resize_padded_fixation
+from utils.function import padded_resize, resize_padded_fixation
 
 
 class SalDB(Dataset):
@@ -32,7 +32,7 @@ class SalDB(Dataset):
         self.item = []
 
         for file in os.listdir(self.img_folder):
-            if file.endswith('png'):
+            if file.endswith('jpg'):
                 img_id = file[:-4]
                 self.item.append(img_id)
 
@@ -41,7 +41,7 @@ class SalDB(Dataset):
 
     def __getitem__(self, index):
         img_id = self.item[index]
-        img = Image.open(os.path.join(self.img_folder, '{}.png'.format(img_id))).convert('RGB')
+        img = Image.open(os.path.join(self.img_folder, '{}.jpg'.format(img_id))).convert('RGB')
         map = Image.open(os.path.join(self.map_folder, '{}.png'.format(img_id))).convert('L')
         fix = Image.open(os.path.join(self.fix_folder, '{}.png'.format(img_id))).convert('L')
 

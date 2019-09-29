@@ -3,16 +3,15 @@ Implementation of Deepfix by Kruthiventi et al.
 @author: Xiao Shanghua
 
 Bug fixes, modified to support pre-trained model intitialization from VGG weights, removing bias for consistency
-with experiment setup, etc. (See deepfix branch for original Shanghua's implementation).
+with experiment setup, etc. (See deepfix branch for original Shanghua's implementation). Hamed R. Tavakoli
 
-@author: Hamed R. Tavakoli
 '''
 
 import torch
 import torch.nn as nn
 from torch.hub import load_state_dict_from_url
 
-#device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
+
 
 
 class InceptionModule(nn.Module):
