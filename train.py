@@ -23,10 +23,20 @@ torch.device(device)
 
 
 learning_rate = 1e-5
+#learning_rate = 1e-3
 
 # mobile sal
-height_dim = 256
+#height_dim = 256
+#width_dim = 320
+
+# fcsal
+#height_dim = 320
+#width_dim = 480
+
+# res2sal
+height_dim = 240
 width_dim = 320
+
 # fastsal
 #height_dim = 512
 #width_dim = 640
@@ -51,7 +61,8 @@ width_dim = 320
 #ts = (30, 40) # mlnet
 #ts = (15, 20) # deep gaze
 #ts = (37, 50) # salicon
-ts = (78, 94)  # mobilesal
+#ts = (78, 94)  # mobilesal
+ts = (64, 80)  # fcsal
 
 #ts = (60, 80)#mlnet
 
@@ -204,9 +215,9 @@ if __name__ == "__main__":
     folder = '/mnt/Databases/SALICON/'
     print("Available models: {}".format(MODEL_NAME))
     cfg = ModelConfig()
-    cfg.MODEL = MODEL_NAME[7]
+    cfg.MODEL = MODEL_NAME[9]
     cfg.B_SIZE = 4
     print("Training: {}".format(cfg.MODEL))
     model = make_model(cfg)
     model_trainer = TrainSal(model, batch_size=4, num_workers=2, root_folder=folder)
-    model_trainer.train_val_model(10, './model_mobilesal/')
+    model_trainer.train_val_model(10, './res2sal/')

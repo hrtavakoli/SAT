@@ -139,15 +139,19 @@ class EstimateSaliency(object):
 if __name__ == "__main__":
 
     folder = '/mnt/Databases/SALICON/images/val'
-    res_folder = '/mnt/Databases/SALICON/results/model_bench/mobilesal'
+    res_folder = '/mnt/Databases/SALICON/results/model_bench/res2sal'
 
     modelcfg = ModelConfig()
-    modelcfg.MODEL = MODEL_NAME[7]
-    modelcfg.H_IN = 256
+    modelcfg.MODEL = MODEL_NAME[9]
+
+    #height_dim = 320
+    #width_dim = 480
+    modelcfg.H_IN = 240
     modelcfg.W_IN = 320
-    modelcfg.H_OUT = 78
-    modelcfg.W_OUT = 94
+    modelcfg.H_OUT = 64
+    modelcfg.W_OUT = 80
     model_trainer = EstimateSaliency(img_path=folder, model_cfg=modelcfg,
-                                     model_path='./pre_train/')
+                                     model_path='./')
+                                     #model_path='./pre_train/')
 
     model_trainer.estimate(savefolder=res_folder)

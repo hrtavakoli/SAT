@@ -5,7 +5,7 @@ Get the model of interest
 @author: Hamed R. Tavakoli
 '''
 
-MODEL_NAME = ['deepgaze2', 'mlnet', 'resnetsal', 'salicon', 'samres', 'deepfix', 'fastsal', 'mobilesal']
+MODEL_NAME = ['deepgaze2', 'mlnet', 'resnetsal', 'salicon', 'samres', 'deepfix', 'fastsal', 'mobilesal', 'fcsal', 'res2netsal']
 
 
 class ModelConfig:

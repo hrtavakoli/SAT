@@ -43,3 +43,14 @@ class Model(nn.Module):
         output = self.decoder(output)
         #output = output * F.interpolate(self.prior, size=(output.shape[2], output.shape[3]))
         return output
+
+
+if __name__ == "__main__":
+    data = torch.ones(1, 3, 240, 320).cuda()
+    model = Model().cuda()
+    output = model(data)
+    print(output)
+    model.train()
+    n_param = sum(p.numel() for p in model.parameters())
+    print(model(data).shape)
+    print(n_param)

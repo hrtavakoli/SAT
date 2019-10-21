@@ -116,3 +116,8 @@ if __name__ == "__main__":
     #print(m)
     a = m(data)
     print(a.shape)
+
+    m.train()
+    n_param = sum(p.numel() for p in m.parameters())
+    print(m(data).shape)
+    print(n_param)
