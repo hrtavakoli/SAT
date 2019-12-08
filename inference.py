@@ -18,6 +18,7 @@ from scipy.ndimage.filters import gaussian_filter
 
 from models import make_model, ModelConfig, MODEL_NAME
 from utils import padded_resize, postprocess_predictions
+from thop import profile
 
 device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
 torch.device(device)
@@ -42,6 +43,15 @@ class EstimateSaliency(object):
 
         self.model.eval()
         self.load_checkpoint(os.path.join(model_path, self.cfg.MODEL, "model_best_{}x{}.pth.tar".format(self.cfg.H_IN, self.cfg.W_IN)))
+
+        # inp = torch.randn(1, 3, 320, 256)
+        # self.model.cpu()(inp)
+        # flops, params = profile(self.model.cpu(), inputs=(inp,))
+        # g_flops = flops / float(1024 * 1024 * 1024)
+        # m_params = params / float(1024 * 1024)
+        # line_0 = 'raw [%s]\tGFLOPs=%sG\tparamsize=%sM\n' % ('resnet', round(g_flops, 4), round(m_params, 4))
+        # print(line_0)
+        # self.model.to(device)
 
     def load_checkpoint(self, model_path):
         if os.path.isfile(model_path):
@@ -136,18 +146,19 @@ class EstimateSaliency(object):
 #height_dim = 256
 #width_dim = 320
 #ts = (27, 35) deepfix
+
 if __name__ == "__main__":
 
-    folder = '/mnt/Databases/SALICON/images/val'
-    res_folder = '/mnt/Databases/SALICON/results/model_bench/mobilesal'
+    folder = 'G:\\datasets\\saliency\\SALICON\\images\\tiny'
+    res_folder = 'G:\\datasets\\saliency\\SALICON\\images\\res'
 
     modelcfg = ModelConfig()
-    modelcfg.MODEL = MODEL_NAME[7]
+    modelcfg.MODEL = MODEL_NAME[2]
     modelcfg.H_IN = 256
     modelcfg.W_IN = 320
-    modelcfg.H_OUT = 78
-    modelcfg.W_OUT = 94
+    modelcfg.H_OUT = 64
+    modelcfg.W_OUT = 80
     model_trainer = EstimateSaliency(img_path=folder, model_cfg=modelcfg,
-                                     model_path='./pre_train/')
+                                     model_path='G:\\checkpoints\\saliency')
 
     model_trainer.estimate(savefolder=res_folder)
