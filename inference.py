@@ -41,7 +41,10 @@ class EstimateSaliency(object):
         self.model = make_model(self.cfg).to(device)
 
         self.model.eval()
-        self.load_checkpoint(os.path.join(model_path, self.cfg.MODEL, "model_best_{}x{}.pth.tar".format(self.cfg.H_IN, self.cfg.W_IN)))
+        #self.load_checkpoint(os.path.join(model_path, self.cfg.MODEL, "model_best_{}x{}.pth.tar".format(self.cfg.H_IN, self.cfg.W_IN)))
+        self.load_checkpoint(
+            #os.path.join(model_path, 'fastsal5', "model_best_{}x{}.pth.tar".format(self.cfg.H_IN, self.cfg.W_IN)))
+            os.path.join(model_path, "pruned_sal_25/model_best_240x320.pth.tar"))
 
     def load_checkpoint(self, model_path):
         if os.path.isfile(model_path):
@@ -139,13 +142,14 @@ class EstimateSaliency(object):
 if __name__ == "__main__":
 
     folder = '/mnt/Databases/SALICON/images/val'
-    res_folder = '/mnt/Databases/SALICON/results/model_bench/res2sal'
+    res_folder = '/mnt/Databases/SALICON/results/model_bench/resnet_p_0.25'
 
     modelcfg = ModelConfig()
-    modelcfg.MODEL = MODEL_NAME[9]
+    modelcfg.MODEL = MODEL_NAME[2]
 
     #height_dim = 320
     #width_dim = 480
+    #240, 320
     modelcfg.H_IN = 240
     modelcfg.W_IN = 320
     modelcfg.H_OUT = 64
