@@ -51,8 +51,6 @@ class Model(nn.Module):
         super(Model, self).__init__()
         self.encode_image = resnet50(pretrained=True)
         modules = list(self.encode_image.children())[:-2]
-        for x in modules:
-            print(x)
         self.encode_image = nn.Sequential(*modules)
         self.decoder1 = _ScaleUp(2048, 1024)
         self.decoder2 = _ScaleUp(1024, 512)
@@ -76,6 +74,7 @@ class Model(nn.Module):
         return sal
 
 
+
 if __name__ == "__main__":
     data = torch.ones(1, 3, 240, 320).cuda()
     model = Model().cuda()
@@ -85,3 +84,5 @@ if __name__ == "__main__":
     n_param = sum(p.numel() for p in model.parameters())
     print(model(data).shape)
     print(n_param)
+    m = Model()
+    print(len(m.state_dict()))

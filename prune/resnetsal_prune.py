@@ -19,6 +19,7 @@ from torchvision.models.resnet import resnet50, Bottleneck
 #from thop import profile
 from PIL import Image
 
+
 class ResidualBlock(nn.Module):
 
     def __init__(self, inp, out, exp, dropend, keeprate, keep_input_size=False, stride=1):
@@ -61,9 +62,11 @@ class ResidualBlock(nn.Module):
                 elif idxc == 3:
                     des = self.convr
                 c1, c2 = des.weight.data.shape[0], des.weight.data.shape[1]
-                d1 = np.squeeze(np.argwhere(np.argsort(np.sum(np.absolute(src.weight.data.cpu().numpy()), axis=(1,2,3)))[::-1][:c1] + 1.))
-                d2 = np.squeeze(np.argwhere(np.argsort(np.sum(np.absolute(src.weight.data.cpu().numpy()), axis=(0,2,3)))[::-1][:c2] + 1.))
-                des.weight.data = src.weight.data[d1.tolist(),:,:,:][:,d2.tolist(),:,:].clone()
+                d1 = np.squeeze(np.argwhere(
+                    np.argsort(np.sum(np.absolute(src.weight.data.cpu().numpy()), axis=(1, 2, 3)))[::-1][:c1] + 1.))
+                d2 = np.squeeze(np.argwhere(
+                    np.argsort(np.sum(np.absolute(src.weight.data.cpu().numpy()), axis=(0, 2, 3)))[::-1][:c2] + 1.))
+                des.weight.data = src.weight.data[d1.tolist(), :, :, :][:, d2.tolist(), :, :].clone()
                 idxc += 1
             if type(src) == nn.BatchNorm2d:
                 if idxb == 0:
@@ -98,6 +101,7 @@ class ResidualBlock(nn.Module):
         x = self.relu(x)
         return x
 
+
 class ScaleUpBlock(nn.Module):
 
     def __init__(self, inp, out, dropend, keeprate):
@@ -106,14 +110,14 @@ class ScaleUpBlock(nn.Module):
         self.res_flag = inp == out
         inp = int(inp * (keeprate if dropend == 'head' else 1)) if inp != 3 else 3
         out = int(out * (keeprate if dropend == 'tail' else 1))
-        self.deconv1 = nn.ConvTranspose2d(inp, inp, kernel_size=2, stride=2, bias=False)
+        self.deconv1 = nn.ConvTranspose2d(inp, inp, kernel_size=2, stride=2)
         self.bn1 = nn.BatchNorm2d(inp)
-        self.relu1 = nn.ReLU(inplace=True)
-        self.conv2 = nn.Conv2d(inp, out, kernel_size=3, stride=1, padding=2, dilation=2, bias=False)
+        self.relu1 = nn.LeakyReLU(inplace=True)
+        self.conv2 = nn.Conv2d(inp, out, kernel_size=3, stride=1, padding=2, dilation=2)
         self.bn2 = nn.BatchNorm2d(out)
-        self.relu2 = nn.ReLU(inplace=True)
-        self.conv3 = nn.Conv2d(out, out, kernel_size=1, stride=1, bias=False)
-        self.relu3 = nn.ReLU(inplace=True)
+        self.relu2 = nn.LeakyReLU(inplace=True)
+        self.conv3 = nn.Conv2d(out, out, kernel_size=1, stride=1)
+        self.relu3 = nn.LeakyReLU(inplace=True)
         self.__init_weight__()
 
     def __init_weight__(self):
@@ -132,9 +136,11 @@ class ScaleUpBlock(nn.Module):
                 elif idxc == 2:
                     des = self.conv3
                 c1, c2 = des.weight.data.shape[0], des.weight.data.shape[1]
-                d1 = np.squeeze(np.argwhere(np.argsort(np.sum(np.absolute(src.weight.data.cpu().numpy()), axis=(1,2,3)))[::-1][:c1] + 1.))
-                d2 = np.squeeze(np.argwhere(np.argsort(np.sum(np.absolute(src.weight.data.cpu().numpy()), axis=(0,2,3)))[::-1][:c2] + 1.))
-                des.weight.data = src.weight.data[d1.tolist(),:,:,:][:,d2.tolist(),:,:].clone()
+                d1 = np.squeeze(np.argwhere(
+                    np.argsort(np.sum(np.absolute(src.weight.data.cpu().numpy()), axis=(1, 2, 3)))[::-1][:c1] + 1.))
+                d2 = np.squeeze(np.argwhere(
+                    np.argsort(np.sum(np.absolute(src.weight.data.cpu().numpy()), axis=(0, 2, 3)))[::-1][:c2] + 1.))
+                des.weight.data = src.weight.data[d1.tolist(), :, :, :][:, d2.tolist(), :, :].clone()
                 idxc += 1
             if type(src) == nn.BatchNorm2d:
                 if idxb == 0:
@@ -196,7 +202,7 @@ class Model(nn.Module):
         #self.decoder3 = ScaleUpBlock(512, 256, 'tail', self.keeprate)
 
         self.encode_image = nn.Sequential(*modules_flat)
-        self.saliency = nn.Conv2d(int(256*self.keeprate), 1, kernel_size=1, stride=1, padding=0, bias=False)
+        self.saliency = nn.Conv2d(int(256 * self.keeprate), 1, kernel_size=1, stride=1, padding=0)
         self.____init_weight__s__()
 
     def __repr__(self):
@@ -204,6 +210,13 @@ class Model(nn.Module):
 
     def ____init_weight__s__(self):
         nn.init.kaiming_normal_(self.saliency.weight)
+
+    def load_state_dict_manually(self, state_dict):
+        assert len(self.state_dict()) == len(state_dict)
+        new_dict = {}
+        for x, y in zip(self.state_dict(), state_dict):
+            new_dict[x] = state_dict[y]
+        self.load_state_dict(new_dict, strict=True)
 
     def forward(self, x):
         x = self.encode_image(x)
@@ -227,9 +240,11 @@ class Model(nn.Module):
                 y.init_pretrained(x)
                 idx += 1
         cs = newmodel.saliency.weight.data.shape[1]
-        ds = np.squeeze(np.argwhere(np.argsort(np.sum(np.absolute(self.saliency.weight.data.cpu().numpy()), axis=(0,2,3)))[::-1][:cs] + 1.))
-        newmodel.saliency.weight.data = self.saliency.weight.data[:,ds.tolist(),:,:].clone()
+        ds = np.squeeze(np.argwhere(
+            np.argsort(np.sum(np.absolute(self.saliency.weight.data.cpu().numpy()), axis=(0, 2, 3)))[::-1][:cs] + 1.))
+        newmodel.saliency.weight.data = self.saliency.weight.data[:, ds.tolist(), :, :].clone()
         return newmodel
+
 
 def main_prune():
     # init trained checkpoints
@@ -242,15 +257,39 @@ def main_prune():
     img = np.array(Image.open(img_path).resize((320, 256))).swapaxes(0,2).swapaxes(1,2)[np.newaxis]
     #img = Variable(torch.from_numpy(img)).type(torch.FloatTensor).cuda()
 
+def run_prune():
+    checkpoint = torch.load('G:\\checkpoints\\saliency\\resnetsal\\model_best_256x320.pth.tar')
+    state_dict = checkpoint['state_dict']    
+    model = Model().cuda()
+    model.load_state_dict_manually(state_dict)
+    newmodel = model.prune(0.95).cuda()
+
+def test_prune():
+    # init trained checkpoints
+    # checkpoint = torch.load('G:\\checkpoints\\saliency\\resnetprune\\model_best_256x320.pth.tar')
+    checkpoint = torch.load('G:\\checkpoints\\saliency\\resnetsal\\model_best_256x320.pth.tar')
+    state_dict = checkpoint['state_dict']
+
+    # init test image
+    img_path = 'G:\\datasets\\saliency\\SALICON\\images\\train\\COCO_train2014_000000000382.jpg'
+    img = np.array(Image.open(img_path).resize((320, 256))).swapaxes(0, 2).swapaxes(1, 2)[np.newaxis]
+    img = Variable(torch.from_numpy(img)).type(torch.FloatTensor).cuda()
+
     # init raw model
     model = Model().cuda()
-    model.load_state_dict(state_dict=state_dict, strict=True)
+    # model.load_state_dict(state_dict=state_dict, strict=True)
+    model.load_state_dict_manually(state_dict)
 
-    # init pruned model. the parameter @keeprate does not acturally keep this much, because the residual module usually in a three layers form, 
+    # init pruned model. the parameter @keeprate does not acturally keep this much, because the residual module usually in a three layers form,
     # the dropping rate is asymmetric between different modules. the actual keeprate is higher than the parameter
     newmodel = model.prune(0.1).cuda()
     print(model)
     print(newmodel)
+    # init pruned model. the parameter @keeprate does not acturally keep this much, because the residual module
+    # usually in a three layers form, the dropping rate is asymmetric between different modules. the actual keeprate
+    # is higher than the parameter
+    newmodel = model.prune(0.95).cuda()
+
     # show output of raw model
     out = model(img.cuda())
     print('output shape: %s' % (str(out.shape)))
@@ -282,3 +321,4 @@ def main_prune():
 
 if __name__ == "__main__":
     main_prune()
+    test_prune()
