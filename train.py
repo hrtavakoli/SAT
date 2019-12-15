@@ -208,4 +208,4 @@ if __name__ == "__main__":
     print("Training: {}".format(cfg.MODEL))
     model = make_model(cfg)
     model_trainer = TrainSal(model, batch_size=cfg.B_SIZE, num_workers=2, root_folder=folder)
-    model_trainer.train_val_model(5, 'G:\\checkpoints\\saliency\\resnetprune\\')
+    model_trainer.train_val_model(5, 'G:\\checkpoints\\saliency\\resnetsal\\')
