@@ -194,7 +194,7 @@ class Model(nn.Module):
             ResidualBlock(2048, 2048, 4, 'tail', self.keeprate),
             ResidualBlock(2048, 2048, 4, 'head', self.keeprate),
             ScaleUpBlock(2048, 1024, 'tail', self.keeprate),
-            ScaleUpBlock(2048, 1024, 'tail', self.keeprate),
+            ScaleUpBlock(1024, 512, 'tail', self.keeprate),
             ScaleUpBlock(512, 256, 'tail', self.keeprate)
         ]
         #self.decoder1 = ScaleUpBlock(2048, 1024, 'tail', self.keeprate)
@@ -251,6 +251,10 @@ def main_prune():
     checkpoint = torch.load('../pre_train/resnetsal/model_best_256x320.pth.tar')
     state_dict = checkpoint['state_dict']
 
+    model = Model().cuda()
+    model.load_state_dict_manually(state_dict)
+
+    print('model_loaded')
     # init test image
     #img_path = 'G:\\datasets\\saliency\\SALICON\\images\\tiny\\COCO_train2014_000000000110.jpg'
     img_path = '/home/rtavah1/Documents/foveated_image/2008_000541.jpg'
@@ -260,7 +264,7 @@ def main_prune():
 def run_prune():
     checkpoint = torch.load('G:\\checkpoints\\saliency\\resnetsal\\model_best_256x320.pth.tar')
     state_dict = checkpoint['state_dict']    
-    model = Model().cuda()
+    model = Model()
     model.load_state_dict_manually(state_dict)
     newmodel = model.prune(0.95).cuda()
 
