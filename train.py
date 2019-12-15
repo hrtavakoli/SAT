@@ -22,6 +22,7 @@ device = torch.device(torch.cuda.current_device() if torch.cuda.is_available() e
 torch.device(device)
 
 
+
 learning_rate = 1e-5
 #learning_rate = 1e-3
 
@@ -63,8 +64,15 @@ width_dim = 320
 #ts = (37, 50) # salicon
 #ts = (78, 94)  # mobilesal
 ts = (32, 40)  # fast sal
+# ts = (32, 40) # fastsal
+# ts = (27, 35) # deepfix
+ts = (64, 80) # resnet sal
+# ts = (30, 40) # mlnet
+# ts = (15, 20) # deep gaze
+# ts = (37, 50) # salicon
+# ts = (78, 94)  # mobilesal
 
-#ts = (60, 80)#mlnet
+# ts = (60, 80)#mlnet
 
 class TrainSal(object):
 
@@ -179,7 +187,7 @@ class TrainSal(object):
             with torch.no_grad():
                 running_loss += loss.item()
 
-            sys.stdout.write("\rEpoch %d -- %s %.01f%% -- Loss: %.03f\n" %
+            sys.stdout.write("\rEpoch %d -- %s %.01f%% -- Loss: %.08f\n" %
                             (epoch+1, fold, (it + 1) / len(dbl) * 100, (running_loss / ((it + 1)*self.batch_size))))
             sys.stdout.flush()
 
@@ -211,15 +219,14 @@ class TrainSal(object):
 
 
 if __name__ == "__main__":
-
-    folder = '/mnt/Databases/SALICON/'
+    folder = 'G:\\datasets\\saliency\\SALICON'
     print("Available models: {}".format(MODEL_NAME))
     cfg = ModelConfig()
     cfg.MODEL = MODEL_NAME[6]
     cfg.B_SIZE = 4
+
     print("Training: {}".format(cfg.MODEL))
     model = make_model(cfg)
-
     checkpoint = torch.load("./fastsal4/model_best_256x320.pth.tar")
     model.load_state_dict(checkpoint['state_dict'])
     model_trainer = TrainSal(model, batch_size=4, num_workers=2, root_folder=folder)
