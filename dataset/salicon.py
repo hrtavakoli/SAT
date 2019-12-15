@@ -13,8 +13,6 @@ from PIL import ImageOps
 from torch.utils.data import Dataset
 from utils.function import padded_resize, resize_padded_fixation
 
-random.seed(43)
-
 class SalDB(Dataset):
     '''
         class to load the images
@@ -44,8 +42,8 @@ class SalDB(Dataset):
     def __getitem__(self, index):
         img_id = self.item[index]
         img = Image.open(os.path.join(self.img_folder, '{}.jpg'.format(img_id))).convert('RGB')
-        map = Image.open(os.path.join(self.map_folder, '{}.jpeg'.format(img_id))).convert('L')
-        fix = Image.open(os.path.join(self.fix_folder, '{}.jpeg'.format(img_id))).convert('L')
+        map = Image.open(os.path.join(self.map_folder, '{}.png'.format(img_id))).convert('L')
+        fix = Image.open(os.path.join(self.fix_folder, '{}.png'.format(img_id))).convert('L')
 
         if self.blur_sigma is not None:
             img = img.filter(ImageFilter.GaussianBlur(self.blur_sigma))
