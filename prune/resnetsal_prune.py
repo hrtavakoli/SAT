@@ -11,12 +11,12 @@ import torch
 import torch.nn as nn
 import torch.nn.functional as F
 import numpy as np
-#import math
-#import copy
+import math
+import copy
 
 from torch.autograd import Variable
 from torchvision.models.resnet import resnet50, Bottleneck
-#from thop import profile
+from thop import profile
 from PIL import Image
 
 
@@ -194,8 +194,8 @@ class Model(nn.Module):
             ResidualBlock(2048, 2048, 4, 'tail', self.keeprate),
             ResidualBlock(2048, 2048, 4, 'head', self.keeprate),
             ScaleUpBlock(2048, 1024, 'tail', self.keeprate),
-            ScaleUpBlock(1024, 512, 'tail', self.keeprate),
-            ScaleUpBlock(512, 256, 'tail', self.keeprate)
+            ScaleUpBlock(1024, 512, 'head', self.keeprate),
+            ScaleUpBlock(512, 256, 'tail', self.keeprate),
         ]
         self.encode_image = nn.Sequential(*modules_flat)
         self.saliency = nn.Conv2d(int(256 * self.keeprate), 1, kernel_size=1, stride=1, padding=0)
@@ -211,15 +211,11 @@ class Model(nn.Module):
         assert len(self.state_dict()) == len(state_dict)
         new_dict = {}
         for x, y in zip(self.state_dict(), state_dict):
-            print(x)
             new_dict[x] = state_dict[y]
         self.load_state_dict(new_dict, strict=True)
 
     def forward(self, x):
         x = self.encode_image(x)
-        x = self.decoder1(x)
-        x = self.decoder2(x)
-        x = self.decoder3(x)
         x = self.saliency(x)
         x = F.relu(x, inplace=True)
         return x
@@ -242,26 +238,10 @@ class Model(nn.Module):
         newmodel.saliency.weight.data = self.saliency.weight.data[:, ds.tolist(), :, :].clone()
         return newmodel
 
-
-def main_prune():
-    # init trained checkpoints
-    checkpoint = torch.load('../pre_train/resnetsal/model_best_256x320.pth.tar')
-    state_dict = checkpoint['state_dict']
-
-    model = Model().cuda()
-    model.load_state_dict_manually(state_dict)
-
-    print('model_loaded')
-    # init test image
-    #img_path = 'G:\\datasets\\saliency\\SALICON\\images\\tiny\\COCO_train2014_000000000110.jpg'
-    img_path = '/home/rtavah1/Documents/foveated_image/2008_000541.jpg'
-    img = np.array(Image.open(img_path).resize((320, 256))).swapaxes(0,2).swapaxes(1,2)[np.newaxis]
-    #img = Variable(torch.from_numpy(img)).type(torch.FloatTensor).cuda()
-
 def run_prune():
     checkpoint = torch.load('G:\\checkpoints\\saliency\\resnetsal\\model_best_256x320.pth.tar')
     state_dict = checkpoint['state_dict']    
-    model = Model()
+    model = Model().cuda()
     model.load_state_dict_manually(state_dict)
     newmodel = model.prune(0.95).cuda()
 
@@ -281,11 +261,6 @@ def test_prune():
     # model.load_state_dict(state_dict=state_dict, strict=True)
     model.load_state_dict_manually(state_dict)
 
-    # init pruned model. the parameter @keeprate does not acturally keep this much, because the residual module usually in a three layers form,
-    # the dropping rate is asymmetric between different modules. the actual keeprate is higher than the parameter
-    newmodel = model.prune(0.1).cuda()
-    print(model)
-    print(newmodel)
     # init pruned model. the parameter @keeprate does not acturally keep this much, because the residual module
     # usually in a three layers form, the dropping rate is asymmetric between different modules. the actual keeprate
     # is higher than the parameter
@@ -306,20 +281,19 @@ def test_prune():
     out = Image.fromarray(out.astype('uint8')).resize((640, 480)).show()
 
     # show gflops of raw model
-    #flops, params = profile(model.cuda(), inputs=(img,))
-    #g_flops = flops / float(1024 * 1024 * 1024)
-    #m_params = params / float(1024 * 1024)
-    #line_1 = 'proned[%s]\tGFLOPs=%sG\tparamsize=%sM\n' % ('resnetsal', round(g_flops, 4), round(m_params, 4))
-    
-    # show gflops of pruned model
-    #flops, params = profile(newmodel.cuda(), inputs=(img,))
-    #g_flops = flops / float(1024 * 1024 * 1024)
-    #m_params = params / float(1024 * 1024)
-    #line_2 = 'proned[%s]\tGFLOPs=%sG\tparamsize=%sM\n' % ('resnetsal', round(g_flops, 4), round(m_params, 4))
+    flops, params = profile(model.cuda(), inputs=(img,))
+    g_flops = flops / float(1024 * 1024 * 1024)
+    m_params = params / float(1024 * 1024)
+    line_1 = 'proned[%s]\tGFLOPs=%sG\tparamsize=%sM\n' % ('resnetsal', round(g_flops, 4), round(m_params, 4))
 
-    #print(line_1)
-    #print(line_2)
+    # show gflops of pruned model
+    flops, params = profile(newmodel.cuda(), inputs=(img,))
+    g_flops = flops / float(1024 * 1024 * 1024)
+    m_params = params / float(1024 * 1024)
+    line_2 = 'proned[%s]\tGFLOPs=%sG\tparamsize=%sM\n' % ('resnetsal', round(g_flops, 4), round(m_params, 4))
+
+    print(line_1)
+    print(line_2)
 
 if __name__ == "__main__":
-    main_prune()
     test_prune()

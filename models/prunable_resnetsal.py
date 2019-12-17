@@ -191,7 +191,7 @@ class Model(nn.Module):
             ResidualBlock(2048, 2048, 4, 'tail', self.keeprate),
             ResidualBlock(2048, 2048, 4, 'head', self.keeprate),
             ScaleUpBlock(2048, 1024, 'tail', self.keeprate),
-            ScaleUpBlock(1024, 512, 'head', self.keeprate),
+            ScaleUpBlock(1024, 512, 'tail', self.keeprate),
             ScaleUpBlock(512, 256, 'tail', self.keeprate)
         ]
         self.encode_image = nn.Sequential(*modules_flat)
