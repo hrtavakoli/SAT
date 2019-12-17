@@ -16,6 +16,7 @@ import numpy as np
 
 
 class ResidualBlock(nn.Module):
+
     def __init__(self, inp, out, exp, dropend, keeprate, keep_input_size=False, stride=1):
         super(ResidualBlock, self).__init__()
         self.keeprate = keeprate
@@ -86,11 +87,8 @@ class ResidualBlock(nn.Module):
             residual = self.bnr(residual)
         x = self.conv1(x)
         x = self.bn1(x)
-        x = self.relu(x)
         x = self.conv2(x)
         x = self.bn2(x)
-        x = self.relu(x)
-
         x = self.conv3(x)
         x = self.bn3(x)
         if not self.res_flag:
@@ -191,15 +189,15 @@ class Model(nn.Module):
             ResidualBlock(2048, 2048, 4, 'tail', self.keeprate),
             ResidualBlock(2048, 2048, 4, 'head', self.keeprate),
             ScaleUpBlock(2048, 1024, 'tail', self.keeprate),
-            ScaleUpBlock(1024, 512, 'tail', self.keeprate),
-            ScaleUpBlock(512, 256, 'tail', self.keeprate)
+            ScaleUpBlock(1024, 512, 'head', self.keeprate),
+            ScaleUpBlock(512, 256, 'tail', self.keeprate),
         ]
         self.encode_image = nn.Sequential(*modules_flat)
         self.saliency = nn.Conv2d(int(256 * self.keeprate), 1, kernel_size=1, stride=1, padding=0)
         self.____init_weight__s__()
 
-    #def __repr__(self):
-    #    return 'ResNet model object: ' + str(id(self))
+    def __repr__(self):
+        return 'ResNet model object: ' + str(id(self))
 
     def ____init_weight__s__(self):
         nn.init.kaiming_normal_(self.saliency.weight)
@@ -208,7 +206,6 @@ class Model(nn.Module):
         assert len(self.state_dict()) == len(state_dict)
         new_dict = {}
         for x, y in zip(self.state_dict(), state_dict):
-            print('{} <---- {}'.format(x, y))
             new_dict[x] = state_dict[y]
         self.load_state_dict(new_dict, strict=True)
 
