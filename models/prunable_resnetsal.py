@@ -86,8 +86,11 @@ class ResidualBlock(nn.Module):
             residual = self.bnr(residual)
         x = self.conv1(x)
         x = self.bn1(x)
+        x = self.relu(x)
         x = self.conv2(x)
         x = self.bn2(x)
+        x = self.relu(x)
+
         x = self.conv3(x)
         x = self.bn3(x)
         if not self.res_flag:
@@ -205,7 +208,7 @@ class Model(nn.Module):
         assert len(self.state_dict()) == len(state_dict)
         new_dict = {}
         for x, y in zip(self.state_dict(), state_dict):
-            print(x)
+            print('{} <---- {}'.format(x, y))
             new_dict[x] = state_dict[y]
         self.load_state_dict(new_dict, strict=True)
 
@@ -235,7 +238,7 @@ class Model(nn.Module):
 
 
 if __name__ == "__main__":
-    data = torch.ones(1, 3, 256, 320).cuda()
+    data = torch.ones(1, 3, 240, 320).cuda()
     model = Model().cuda()
     checkpoint = torch.load('../pre_train/resnetsal/model_best_256x320.pth.tar')
     state_dict = checkpoint['state_dict']
