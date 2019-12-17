@@ -2,8 +2,10 @@
 ResNet Saliency a baseline model with ResNet 50 backbone
 
 @author: Hamed R. Tavakoli
+         Shanghua
 
-To perform prunning, first train this model using train.py, then provide the checkpoint and keep rate (1 - prune rate).
+A prunable version of ResNetSal that is capable of restructuring the model from a resnetsal checkpoint given a
+prune ratio
 
 '''
 
@@ -11,17 +13,9 @@ import torch
 import torch.nn as nn
 import torch.nn.functional as F
 import numpy as np
-#import math
-#import copy
-
-from torch.autograd import Variable
-from torchvision.models.resnet import resnet50, Bottleneck
-#from thop import profile
-from PIL import Image
 
 
 class ResidualBlock(nn.Module):
-
     def __init__(self, inp, out, exp, dropend, keeprate, keep_input_size=False, stride=1):
         super(ResidualBlock, self).__init__()
         self.keeprate = keeprate
@@ -194,15 +188,15 @@ class Model(nn.Module):
             ResidualBlock(2048, 2048, 4, 'tail', self.keeprate),
             ResidualBlock(2048, 2048, 4, 'head', self.keeprate),
             ScaleUpBlock(2048, 1024, 'tail', self.keeprate),
-            ScaleUpBlock(1024, 512, 'tail', self.keeprate),
+            ScaleUpBlock(1024, 512, 'head', self.keeprate),
             ScaleUpBlock(512, 256, 'tail', self.keeprate)
         ]
         self.encode_image = nn.Sequential(*modules_flat)
         self.saliency = nn.Conv2d(int(256 * self.keeprate), 1, kernel_size=1, stride=1, padding=0)
         self.____init_weight__s__()
 
-    def __repr__(self):
-        return 'ResNet model object: ' + str(id(self))
+    #def __repr__(self):
+    #    return 'ResNet model object: ' + str(id(self))
 
     def ____init_weight__s__(self):
         nn.init.kaiming_normal_(self.saliency.weight)
@@ -217,9 +211,6 @@ class Model(nn.Module):
 
     def forward(self, x):
         x = self.encode_image(x)
-        x = self.decoder1(x)
-        x = self.decoder2(x)
-        x = self.decoder3(x)
         x = self.saliency(x)
         x = F.relu(x, inplace=True)
         return x
@@ -243,83 +234,20 @@ class Model(nn.Module):
         return newmodel
 
 
-def main_prune():
-    # init trained checkpoints
+if __name__ == "__main__":
+    data = torch.ones(1, 3, 256, 320).cuda()
+    model = Model().cuda()
     checkpoint = torch.load('../pre_train/resnetsal/model_best_256x320.pth.tar')
     state_dict = checkpoint['state_dict']
-
-    model = Model().cuda()
     model.load_state_dict_manually(state_dict)
-
-    print('model_loaded')
-    # init test image
-    #img_path = 'G:\\datasets\\saliency\\SALICON\\images\\tiny\\COCO_train2014_000000000110.jpg'
-    img_path = '/home/rtavah1/Documents/foveated_image/2008_000541.jpg'
-    img = np.array(Image.open(img_path).resize((320, 256))).swapaxes(0,2).swapaxes(1,2)[np.newaxis]
-    #img = Variable(torch.from_numpy(img)).type(torch.FloatTensor).cuda()
-
-def run_prune():
-    checkpoint = torch.load('G:\\checkpoints\\saliency\\resnetsal\\model_best_256x320.pth.tar')
-    state_dict = checkpoint['state_dict']    
-    model = Model()
-    model.load_state_dict_manually(state_dict)
-    newmodel = model.prune(0.95).cuda()
-
-def test_prune():
-    # init trained checkpoints
-    # checkpoint = torch.load('G:\\checkpoints\\saliency\\resnetprune\\model_best_256x320.pth.tar')
-    checkpoint = torch.load('G:\\checkpoints\\saliency\\resnetsal\\model_best_256x320.pth.tar')
-    state_dict = checkpoint['state_dict']
-
-    # init test image
-    img_path = 'G:\\datasets\\saliency\\SALICON\\images\\train\\COCO_train2014_000000000382.jpg'
-    img = np.array(Image.open(img_path).resize((320, 256))).swapaxes(0, 2).swapaxes(1, 2)[np.newaxis]
-    img = Variable(torch.from_numpy(img)).type(torch.FloatTensor).cuda()
-
-    # init raw model
-    model = Model().cuda()
-    # model.load_state_dict(state_dict=state_dict, strict=True)
-    model.load_state_dict_manually(state_dict)
-
-    # init pruned model. the parameter @keeprate does not acturally keep this much, because the residual module usually in a three layers form,
-    # the dropping rate is asymmetric between different modules. the actual keeprate is higher than the parameter
-    newmodel = model.prune(0.1).cuda()
-    print(model)
-    print(newmodel)
-    # init pruned model. the parameter @keeprate does not acturally keep this much, because the residual module
-    # usually in a three layers form, the dropping rate is asymmetric between different modules. the actual keeprate
-    # is higher than the parameter
-    newmodel = model.prune(0.95).cuda()
-
-    # show output of raw model
-    out = model(img.cuda())
-    print('output shape: %s' % (str(out.shape)))
-    out = out.cpu().data.numpy()[0][0]
-    out = 255. * (out - np.min(out)) / (np.max(out) - np.min(out))
-    out = Image.fromarray(out.astype('uint8')).resize((640, 480)).show()
-
-    # show output of pruned model
-    out = newmodel(img.cuda())
-    print('output shape: %s' % (str(out.shape)))
-    out = out.cpu().data.numpy()[0][0]
-    out = 255. * (out - np.min(out)) / (np.max(out) - np.min(out))
-    out = Image.fromarray(out.astype('uint8')).resize((640, 480)).show()
-
-    # show gflops of raw model
-    #flops, params = profile(model.cuda(), inputs=(img,))
-    #g_flops = flops / float(1024 * 1024 * 1024)
-    #m_params = params / float(1024 * 1024)
-    #line_1 = 'proned[%s]\tGFLOPs=%sG\tparamsize=%sM\n' % ('resnetsal', round(g_flops, 4), round(m_params, 4))
-    
-    # show gflops of pruned model
-    #flops, params = profile(newmodel.cuda(), inputs=(img,))
-    #g_flops = flops / float(1024 * 1024 * 1024)
-    #m_params = params / float(1024 * 1024)
-    #line_2 = 'proned[%s]\tGFLOPs=%sG\tparamsize=%sM\n' % ('resnetsal', round(g_flops, 4), round(m_params, 4))
-
-    #print(line_1)
-    #print(line_2)
-
-if __name__ == "__main__":
-    main_prune()
-    test_prune()
+    new_model = model.prune(0.9).cuda()
+    output = new_model(data)
+    print(output)
+    model.train()
+    n_param = sum(p.numel() for p in new_model.parameters())
+    print(new_model(data).shape)
+    print(n_param)
+    n_param = sum(p.numel() for p in model.parameters())
+    print(n_param)
+    #m = Model()
+    #print(len(m.state_dict()))

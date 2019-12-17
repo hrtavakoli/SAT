@@ -16,6 +16,7 @@ from PIL import Image
 
 from scipy.ndimage.filters import gaussian_filter
 
+from models.prunable_resnetsal import Model
 from models import make_model, ModelConfig, MODEL_NAME
 from utils import padded_resize, postprocess_predictions
 from thop import profile
@@ -39,13 +40,14 @@ class EstimateSaliency(object):
         self.cfg = model_cfg
 
         print("Estimating: {}".format(self.cfg.MODEL))
-        self.model = make_model(self.cfg).to(device)
+        #self.model = make_model(self.cfg).to(device)
+        self.model = Model().to(device)
 
         self.model.eval()
         #self.load_checkpoint(os.path.join(model_path, self.cfg.MODEL, "model_best_{}x{}.pth.tar".format(self.cfg.H_IN, self.cfg.W_IN)))
         self.load_checkpoint(
-            #os.path.join(model_path, 'fastsal5', "model_best_{}x{}.pth.tar".format(self.cfg.H_IN, self.cfg.W_IN)))
-            os.path.join(model_path, "pruned_sal_25/model_best_240x320.pth.tar"))
+            os.path.join(model_path, self.cfg.MODEL, "model_best_{}x{}.pth.tar".format(self.cfg.H_IN, self.cfg.W_IN)))
+            #os.path.join(model_path, "pruned_sal_25/model_best_240x320.pth.tar"))
 
         # inp = torch.randn(1, 3, 320, 256)
         # self.model.cpu()(inp)
@@ -74,7 +76,8 @@ class EstimateSaliency(object):
                     state_dict[new_key] = state_dict[key]
                     del state_dict[key]
 
-            self.model.load_state_dict(state_dict=state_dict, strict=True)
+            #self.model.load_state_dict(state_dict=state_dict, strict=True)
+            self.model.load_state_dict_manually(state_dict=state_dict)
             print("=> loaded checkpoint '{}' )".format(model_path))
         else:
             print("=> no checkpoint found at '{}'".format(model_path))
@@ -154,7 +157,7 @@ if __name__ == "__main__":
 
 
     folder = '/mnt/Databases/SALICON/images/val'
-    res_folder = '/mnt/Databases/SALICON/results/model_bench/resnet_p_0.25'
+    res_folder = '/mnt/Databases/SALICON/results/model_bench/resnet_prunable'
 
     #folder = 'G:\\datasets\\saliency\\SALICON\\images\\tiny'
     #res_folder = 'G:\\datasets\\saliency\\SALICON\\images\\res'
@@ -165,7 +168,7 @@ if __name__ == "__main__":
     #height_dim = 320
     #width_dim = 480
     #240, 320
-    modelcfg.H_IN = 240
+    #modelcfg.H_IN = 240
 
     modelcfg = ModelConfig()
     modelcfg.MODEL = MODEL_NAME[2]
@@ -174,8 +177,8 @@ if __name__ == "__main__":
     modelcfg.H_OUT = 64
     modelcfg.W_OUT = 80
     model_trainer = EstimateSaliency(img_path=folder, model_cfg=modelcfg,
-                                     model_path='./')
-                                     #model_path='./pre_train/')
+                                     #model_path='./')
+                                     model_path='./pre_train/')
                                      #model_path='G:\\checkpoints\\saliency')
 
     model_trainer.estimate(savefolder=res_folder)
