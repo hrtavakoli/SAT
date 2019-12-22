@@ -95,3 +95,4 @@ if __name__ == "__main__":
     n_param = sum(p.numel() for p in model.parameters())
     print(model(sample_input).shape)
     print(n_param)
+

@@ -16,6 +16,8 @@ import torchvision.transforms as transforms
 from dataset import SalDB
 from utils import KLLoss, ANSSLoss, ACCLoss
 
+import torch.nn as nn
+
 from models import make_model, ModelConfig, MODEL_NAME
 
 device = torch.device(torch.cuda.current_device() if torch.cuda.is_available() else "cpu")
@@ -34,8 +36,13 @@ learning_rate = 1e-5
 #width_dim = 480
 
 # res2sal
-height_dim = 256
+#height_dim = 256
+#width_dim = 320
+
+# resnetsal
+height_dim = 240
 width_dim = 320
+
 
 # fastsal
 #height_dim = 512
@@ -57,29 +64,23 @@ width_dim = 320
 
 #ts = (64, 80) # fastsal
 #ts = (27, 35) # deepfix
-#ts = (64, 80) # resnet sal
+ts = (64, 80) # resnet sal
 #ts = (30, 40) # mlnet
 #ts = (15, 20) # deep gaze
 #ts = (37, 50) # salicon
 #ts = (78, 94)  # mobilesal
-ts = (32, 40)  # fast sal
-# ts = (32, 40) # fastsal
-# ts = (27, 35) # deepfix
-ts = (64, 80) # resnet sal
-# ts = (30, 40) # mlnet
-# ts = (15, 20) # deep gaze
-# ts = (37, 50) # salicon
-# ts = (78, 94)  # mobilesal
+#ts = (32, 40)  # fast sal
 
-# ts = (60, 80)#mlnet
+#ts = (60, 80)#mlnet
 
 class TrainSal(object):
 
-    def __init__(self, model, batch_size, num_workers, root_folder):
+    def __init__(self, model, mask, batch_size, num_workers, root_folder):
         super(TrainSal, self).__init__()
 
         self.model = model.to(device)
         self.model.train()
+        self.mask = mask
 
         self.val_loss = 0.0
 
@@ -182,11 +183,18 @@ class TrainSal(object):
                 #loss.backward(retain_graph=True)
                 loss.backward()
                 self.optimizer.step()
+                cnt = 0
+                for m in model.modules():
+                    if isinstance(m, nn.Conv2d) or isinstance(m, nn.ConvTranspose2d):
+                        idx = self.mask[cnt]
+                        m.weight.data[idx.tolist(), :, :, :] = 0.0
+                        cnt = cnt + 1
+
 
             with torch.no_grad():
                 running_loss += loss.item()
 
-            sys.stdout.write("\rEpoch %d -- %s %.01f%% -- Loss: %.08f\n" %
+            sys.stdout.write("\rEpoch %d -- %s %.01f%% -- Loss: %.03f\n" %
                             (epoch+1, fold, (it + 1) / len(dbl) * 100, (running_loss / ((it + 1)*self.batch_size))))
             sys.stdout.flush()
 
@@ -218,15 +226,18 @@ class TrainSal(object):
 
 
 if __name__ == "__main__":
-    folder = 'G:\\datasets\\saliency\\SALICON'
+
+    folder = '/mnt/Databases/SALICON/'
     print("Available models: {}".format(MODEL_NAME))
     cfg = ModelConfig()
-    cfg.MODEL = MODEL_NAME[6]
+    cfg.MODEL = MODEL_NAME[2]
     cfg.B_SIZE = 4
-
     print("Training: {}".format(cfg.MODEL))
     model = make_model(cfg)
-    checkpoint = torch.load("./fastsal4/model_best_256x320.pth.tar")
+
+    #checkpoint = torch.load("./fastsal4/model_best_256x320.pth.tar")
+    checkpoint = torch.load("./p_0.75_pruned.pth.tar")
     model.load_state_dict(checkpoint['state_dict'])
-    model_trainer = TrainSal(model, batch_size=4, num_workers=2, root_folder=folder)
-    model_trainer.train_val_model(1000, './fastsal5/')
+    mask = checkpoint["prune_mask"]
+    model_trainer = TrainSal(model, mask, batch_size=4, num_workers=2, root_folder=folder)
+    model_trainer.train_val_model(10, './pruned_sal_75/')

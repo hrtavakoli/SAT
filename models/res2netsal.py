@@ -7,7 +7,7 @@ import torch
 import torch.nn as nn
 import torch.nn.functional as F
 
-from torchvision.models.resnet import resnet50
+from .res2net import res2net50_14w_8s
 
 
 class _ScaleUp(nn.Module):
@@ -49,7 +49,7 @@ class Model(nn.Module):
 
     def __init__(self, ):
         super(Model, self).__init__()
-        self.encode_image = resnet50(pretrained=True)
+        self.encode_image = res2net50_14w_8s(pretrained=True)
         modules = list(self.encode_image.children())[:-2]
         self.encode_image = nn.Sequential(*modules)
         self.decoder1 = _ScaleUp(2048, 1024)
@@ -73,8 +73,6 @@ class Model(nn.Module):
         sal = F.relu(sal, inplace=True)
         return sal
 
-
-
 if __name__ == "__main__":
     data = torch.ones(1, 3, 240, 320).cuda()
     model = Model().cuda()
@@ -84,5 +82,3 @@ if __name__ == "__main__":
     n_param = sum(p.numel() for p in model.parameters())
     print(model(data).shape)
     print(n_param)
-    m = Model()
-    print(len(m.state_dict()))

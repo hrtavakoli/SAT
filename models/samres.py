@@ -110,9 +110,10 @@ class Model(nn.Module):
 
 if __name__ == "__main__":
     data = torch.ones(1, 3, 240, 320).cuda()
-    m = Model(1).cuda()
-    output = m(data)
+    model = Model(1).cuda()
+    output = model(data)
     print(output)
-    L = torch.sum(output)
-    print(L)
-    L.backward()
+    model.train()
+    n_param = sum(p.numel() for p in model.parameters())
+    print(model(data).shape)
+    print(n_param)

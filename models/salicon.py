@@ -39,3 +39,8 @@ if __name__ == "__main__":
     m = Model()
     a = m(data)
     print(a.shape)
+
+    m.train()
+    n_param = sum(p.numel() for p in m.parameters())
+    print(m(data).shape)
+    print(n_param)
