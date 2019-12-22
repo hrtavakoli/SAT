@@ -43,7 +43,6 @@ class EstimateSaliency(object):
 
         self.model.eval()
         self.load_checkpoint(os.path.join(model_path, self.cfg.MODEL, "model_best_{}x{}.pth.tar".format(self.cfg.H_IN, self.cfg.W_IN)))
-
         # inp = torch.randn(1, 3, 320, 256)
         # self.model.cpu()(inp)
         # flops, params = profile(self.model.cpu(), inputs=(inp,))
@@ -105,6 +104,7 @@ class EstimateSaliency(object):
 
             start = time.time()
             saloutput = self.model(img1)
+
             end = time.time()
             time_list.append(end-start)
             saloutput = _normalize_data(saloutput)

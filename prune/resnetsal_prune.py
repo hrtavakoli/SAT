@@ -13,31 +13,31 @@ import torch.nn.functional as F
 import numpy as np
 import math
 import copy
+import re
 
 from torch.autograd import Variable
 from torchvision.models.resnet import resnet50, Bottleneck
 from thop import profile
 from PIL import Image
-
+from utils import postprocess
 
 class ResidualBlock(nn.Module):
 
-    def __init__(self, inp, out, exp, dropend, keeprate, keep_input_size=False, stride=1):
+    def __init__(self, inp, out, exp, keeprate, keep_input_size=False, stride=1):
         super(ResidualBlock, self).__init__()
         self.keeprate = keeprate
-        self.dropend = dropend
-        self.res_flag = inp == out
-        inp = int(inp * (keeprate if dropend == 'head' else 1)) if not keep_input_size else inp
-        out = int(out * (keeprate if dropend == 'tail' else 1))
+        self.res_flag = (inp != out)
+        inp = int(inp * keeprate) if not keep_input_size else inp
+        out = int(out * keeprate)    
         mid = int(out // exp)
-        self.conv1 = nn.Conv2d(inp, mid, kernel_size=1, padding=0, bias=False)
+        self.conv1 = nn.Conv2d(inp, mid, kernel_size=1, stride=1, padding=0, bias=False)
         self.bn1 = nn.BatchNorm2d(mid)
-        self.conv2 = nn.Conv2d(mid, mid, kernel_size=3, stride=stride, padding=1, bias=False)
+        self.conv2 = nn.Conv2d(mid, mid, kernel_size=3, stride=stride, padding=1, groups=1, dilation=1, bias=False)
         self.bn2 = nn.BatchNorm2d(mid)
-        self.conv3 = nn.Conv2d(mid, out, kernel_size=1, padding=0, bias=False)
+        self.conv3 = nn.Conv2d(mid, out, kernel_size=1, stride=1, padding=0, bias=False)
         self.bn3 = nn.BatchNorm2d(out)
         self.relu = nn.ReLU(inplace=True)
-        if not self.res_flag:
+        if self.res_flag:
             self.convr = nn.Conv2d(inp, out, kernel_size=1, stride=stride, padding=0, bias=False)
             self.bnr = nn.BatchNorm2d(out)
         self.__init_weight__()
@@ -46,7 +46,7 @@ class ResidualBlock(nn.Module):
         nn.init.kaiming_normal_(self.conv1.weight)
         nn.init.kaiming_normal_(self.conv2.weight)
         nn.init.kaiming_normal_(self.conv3.weight)
-        if not self.res_flag:
+        if self.res_flag:
             nn.init.kaiming_normal_(self.convr.weight)
 
     def init_pretrained(self, resblock):
@@ -86,30 +86,30 @@ class ResidualBlock(nn.Module):
                 idxb += 1
 
     def forward(self, x):
-        residual = x
-        if not self.res_flag:
-            residual = self.convr(residual)
-            residual = self.bnr(residual)
-        x = self.conv1(x)
-        x = self.bn1(x)
-        x = self.conv2(x)
-        x = self.bn2(x)
-        x = self.conv3(x)
-        x = self.bn3(x)
-        if not self.res_flag:
-            x += residual
-        x = self.relu(x)
-        return x
-
+        identity = x
+        out = self.conv1(x)
+        out = self.bn1(out)
+        out = self.relu(out)
+        out = self.conv2(out)
+        out = self.bn2(out)
+        out = self.relu(out)
+        out = self.conv3(out)
+        out = self.bn3(out)
+        if self.res_flag:
+            identity = self.convr(x)
+            identity = self.bnr(identity)
+        out += identity
+        out = self.relu(out)
+        return out
 
 class ScaleUpBlock(nn.Module):
 
-    def __init__(self, inp, out, dropend, keeprate):
+    def __init__(self, inp, out, keeprate):
         super(ScaleUpBlock, self).__init__()
         self.keeprate = keeprate
         self.res_flag = inp == out
-        inp = int(inp * (keeprate if dropend == 'head' else 1)) if inp != 3 else 3
-        out = int(out * (keeprate if dropend == 'tail' else 1))
+        inp = int(inp * keeprate)
+        out = int(out * keeprate)
         self.deconv1 = nn.ConvTranspose2d(inp, inp, kernel_size=2, stride=2)
         self.bn1 = nn.BatchNorm2d(inp)
         self.relu1 = nn.LeakyReLU(inplace=True)
@@ -177,25 +177,25 @@ class Model(nn.Module):
             nn.BatchNorm2d(64, eps=1e-05, momentum=0.1, affine=True, track_running_stats=True),
             nn.ReLU(inplace=True),
             nn.MaxPool2d(kernel_size=3, stride=2, padding=1, dilation=1, ceil_mode=False),
-            ResidualBlock(64, 256, 4, 'tail', self.keeprate, keep_input_size=True),
-            ResidualBlock(256, 256, 4, 'head', self.keeprate),
-            ResidualBlock(256, 256, 4, 'tail', self.keeprate),
-            ResidualBlock(256, 512, 4, 'head', self.keeprate, stride=2),
-            ResidualBlock(512, 512, 4, 'tail', self.keeprate),
-            ResidualBlock(512, 512, 4, 'head', self.keeprate),
-            ResidualBlock(512, 512, 4, 'tail', self.keeprate),
-            ResidualBlock(512, 1024, 4, 'head', self.keeprate, stride=2),
-            ResidualBlock(1024, 1024, 4, 'tail', self.keeprate),
-            ResidualBlock(1024, 1024, 4, 'head', self.keeprate),
-            ResidualBlock(1024, 1024, 4, 'tail', self.keeprate),
-            ResidualBlock(1024, 1024, 4, 'head', self.keeprate),
-            ResidualBlock(1024, 1024, 4, 'tail', self.keeprate),
-            ResidualBlock(1024, 2048, 4, 'head', self.keeprate, stride=2),
-            ResidualBlock(2048, 2048, 4, 'tail', self.keeprate),
-            ResidualBlock(2048, 2048, 4, 'head', self.keeprate),
-            ScaleUpBlock(2048, 1024, 'tail', self.keeprate),
-            ScaleUpBlock(1024, 512, 'head', self.keeprate),
-            ScaleUpBlock(512, 256, 'tail', self.keeprate),
+            ResidualBlock(64, 256, 4, self.keeprate, keep_input_size=True),
+            ResidualBlock(256, 256, 4, self.keeprate),
+            ResidualBlock(256, 256, 4, self.keeprate),
+            ResidualBlock(256, 512, 4, self.keeprate, stride=2),
+            ResidualBlock(512, 512, 4, self.keeprate),
+            ResidualBlock(512, 512, 4, self.keeprate),
+            ResidualBlock(512, 512, 4, self.keeprate),
+            ResidualBlock(512, 1024, 4, self.keeprate, stride=2),
+            ResidualBlock(1024, 1024, 4, self.keeprate),
+            ResidualBlock(1024, 1024, 4, self.keeprate),
+            ResidualBlock(1024, 1024, 4, self.keeprate),
+            ResidualBlock(1024, 1024, 4, self.keeprate),
+            ResidualBlock(1024, 1024, 4, self.keeprate),
+            ResidualBlock(1024, 2048, 4, self.keeprate, stride=2),
+            ResidualBlock(2048, 2048, 4, self.keeprate),
+            ResidualBlock(2048, 2048, 4, self.keeprate),
+            ScaleUpBlock(2048, 1024, self.keeprate),
+            ScaleUpBlock(1024, 512, self.keeprate),
+            ScaleUpBlock(512, 256, self.keeprate),
         ]
         self.encode_image = nn.Sequential(*modules_flat)
         self.saliency = nn.Conv2d(int(256 * self.keeprate), 1, kernel_size=1, stride=1, padding=0)
@@ -235,6 +235,7 @@ class Model(nn.Module):
         cs = newmodel.saliency.weight.data.shape[1]
         ds = np.squeeze(np.argwhere(
             np.argsort(np.sum(np.absolute(self.saliency.weight.data.cpu().numpy()), axis=(0, 2, 3)))[::-1][:cs] + 1.))
+            # np.argsort(np.sum((self.saliency.weight.data.cpu().numpy()), axis=(0, 2, 3)))[::-1][:cs] + 1.))
         newmodel.saliency.weight.data = self.saliency.weight.data[:, ds.tolist(), :, :].clone()
         return newmodel
 
@@ -243,42 +244,45 @@ def run_prune():
     state_dict = checkpoint['state_dict']    
     model = Model().cuda()
     model.load_state_dict_manually(state_dict)
-    newmodel = model.prune(0.95).cuda()
+    newmodel = model.prune(0.75).cuda()
 
 def test_prune():
+    # init test image
+    img_path = 'G:\\datasets\\saliency\\SALICON\\images\\train\\COCO_train2014_000000000389.jpg'
+    img = np.array(Image.open(img_path).resize((320, 256))).swapaxes(0, 2).swapaxes(1, 2)[np.newaxis]
+    img = Variable(torch.from_numpy(img)).type(torch.FloatTensor).cuda()
+
     # init trained checkpoints
     # checkpoint = torch.load('G:\\checkpoints\\saliency\\resnetprune\\model_best_256x320.pth.tar')
     checkpoint = torch.load('G:\\checkpoints\\saliency\\resnetsal\\model_best_256x320.pth.tar')
     state_dict = checkpoint['state_dict']
 
-    # init test image
-    img_path = 'G:\\datasets\\saliency\\SALICON\\images\\train\\COCO_train2014_000000000382.jpg'
-    img = np.array(Image.open(img_path).resize((320, 256))).swapaxes(0, 2).swapaxes(1, 2)[np.newaxis]
-    img = Variable(torch.from_numpy(img)).type(torch.FloatTensor).cuda()
-
     # init raw model
     model = Model().cuda()
-    # model.load_state_dict(state_dict=state_dict, strict=True)
     model.load_state_dict_manually(state_dict)
-
-    # init pruned model. the parameter @keeprate does not acturally keep this much, because the residual module
-    # usually in a three layers form, the dropping rate is asymmetric between different modules. the actual keeprate
-    # is higher than the parameter
-    newmodel = model.prune(0.95).cuda()
+    # model.load_state_dict(state_dict=state_dict, strict=True)
 
     # show output of raw model
     out = model(img.cuda())
     print('output shape: %s' % (str(out.shape)))
     out = out.cpu().data.numpy()[0][0]
     out = 255. * (out - np.min(out)) / (np.max(out) - np.min(out))
-    out = Image.fromarray(out.astype('uint8')).resize((640, 480)).show()
+    out = Image.fromarray(out.astype('uint8')).resize((640, 480))
+    out = postprocess(out)
+    out.show()
 
+    # init pruned model. the parameter @keeprate does not acturally keep this much, because the residual module
+    # usually in a three layers form, the dropping rate is asymmetric between different modules. the actual keeprate
+    # is higher than the parameter
+    newmodel = model.prune(1).cuda()
     # show output of pruned model
     out = newmodel(img.cuda())
     print('output shape: %s' % (str(out.shape)))
     out = out.cpu().data.numpy()[0][0]
-    out = 255. * (out - np.min(out)) / (np.max(out) - np.min(out))
-    out = Image.fromarray(out.astype('uint8')).resize((640, 480)).show()
+    out = 255. * (out - np.min(out)) / (np.max(out) - np.min(out))  
+    out = Image.fromarray(out.astype('uint8')).resize((640, 480))
+    out = postprocess(out)
+    out.show()
 
     # show gflops of raw model
     flops, params = profile(model.cuda(), inputs=(img,))

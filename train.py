@@ -22,7 +22,7 @@ device = torch.device(torch.cuda.current_device() if torch.cuda.is_available() e
 torch.device(device)
 
 
-learning_rate = 1e-3
+learning_rate = 5e-4
 
 # mobile sal
 height_dim = 256
@@ -208,4 +208,4 @@ if __name__ == "__main__":
     print("Training: {}".format(cfg.MODEL))
     model = make_model(cfg)
     model_trainer = TrainSal(model, batch_size=cfg.B_SIZE, num_workers=2, root_folder=folder)
-    model_trainer.train_val_model(5, 'G:\\checkpoints\\saliency\\resnetsal\\')
+    model_trainer.train_val_model(50, 'G:\\checkpoints\\saliency\\resnetsal\\')
